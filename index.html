@@ -762,7 +762,7 @@ function drawBg(t) {
       const maxPan = bgW - W; // ~809px of pan range
 
       // Scroll background left continuously (character "runs" through the world)
-      scavBgOffset = (scavBgOffset + 0.8) % maxPan;
+      scavBgOffset = (scavBgOffset + 0.3) % maxPan;
       const bx = -Math.round(scavBgOffset);
 
       cx.save();
@@ -1360,7 +1360,10 @@ const EVENTS = {
 let nightEvts = [];
 function startNight() {
   S.phase = 'night';
-  scavX = S.phase === 'night' ? W * 0.35 : -60;
+  scavX = W * 0.35;
+  // Each scavenging run picks a fresh background and resets scroll
+  scavBgVariant = Math.floor(Math.random() * 3);
+  scavBgOffset = 0;
   decay();
   if (checkDead()) return;
   // Build event queue from chosen location
