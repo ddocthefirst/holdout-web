@@ -356,10 +356,11 @@ const SCROLL = PARALLAX_LAYERS.map(() => 0);
 
 // Base interior crop coords in base-levels.jpg (1280×853)
 // 3 rows: Level 1 (top), Level 2 (mid), Level 3 (bottom)
+// Crop slightly tighter to avoid "LEVEL N" text watermark in the middle
 const BASE_LEVELS = [
-  { sy:10,  sh:270 },
-  { sy:290, sh:270 },
-  { sy:572, sh:270 },
+  { sy:10,  sh:240 },   // Level 1: top row, stop before the label
+  { sy:295, sh:240 },   // Level 2: mid row
+  { sy:578, sh:240 },   // Level 3: bottom row
 ];
 
 function loadAssets(callback) {
@@ -467,35 +468,64 @@ function drawBg(t) {
     // Scroll speed multiplier — scroll when scavenging night scene
     const scrollMult = isScavenging ? 1 : 0;
 
-    // Draw 4 depth layers (right-side tileable strips)
-    const layerDefs = [
-      { idx:0, yDest:0,        hDest:GY*0.4 },   // sky-far
-      { idx:1, yDest:GY*0.15,  hDest:GY*0.5 },   // city-far
-      { idx:2, yDest:GY*0.32,  hDest:GY*0.55 },  // forest-mid
-      { idx:3, yDest:GY*0.52,  hDest:GY*0.52 },  // ruin-near
-    ];
+    // Use right half of parallax.jpg — the "TILEABLE SIDE-SCROLL BACKGROUNDS" section
+    // Right half (x=640, w=640) contains 5 clean rows without label dividers
+    // We'll pick rows based on night vs day:
+    //   Row 0 (y=0..170): City skyline + crescent moon — perfect night sky
+    //   Row 1 (y=170..345): Forest/ruins with house glow — mid background
+    //   Row 2 (y=345..500): Open ruins/trees — near background
+    //   Row 4 (y=660..853): Dark ruins — near foreground
+    // Blend two rows for depth
+    const bgRightX = 640, bgRightW = 640;
+    const rowH = 170;
 
+    // Far layer — city skyline + moon (row 0 of right half, skip top ~45px to avoid header text)
+    const farSrcY = 42, farSrcH = 140;
+    const farDestH = GY * 0.65;
+    const farDestW = Math.round(bgRightW * farDestH / farSrcH);
+    SCROLL[0] = (SCROLL[0] + 0.10 * scrollMult + 0.02) % farDestW;
     cx.save();
-    cx.globalAlpha = nf > 0.1 ? Math.min(1, nf * 2) : 0; // fade in with night
-    layerDefs.forEach(({ idx, yDest, hDest }) => {
-      const lyr = PARALLAX_LAYERS[idx];
-      SCROLL[idx] = (SCROLL[idx] + lyr.speed * scrollMult * 0.5) % lyr.sw;
-      const sx = SCROLL[idx];
-      // Tile the strip across the destination width (420px) from a 640px source strip
-      const dw = W;
-      const scaledSW = lyr.sw * (hDest / lyr.sh); // proportional width at this height
-      // Draw 2 tiles to seamlessly cover width
-      const sx1 = (sx / lyr.sw) * scaledSW;
-      for (let tx = -sx1; tx < dw + scaledSW; tx += scaledSW) {
-        cx.drawImage(img, lyr.sx, lyr.sy, lyr.sw, lyr.sh,
-                     Math.round(tx), Math.round(yDest), Math.round(scaledSW), Math.round(hDest));
-      }
-    });
+    cx.globalAlpha = 0.7;
+    for (let tx = -SCROLL[0]; tx < W + farDestW; tx += farDestW) {
+      cx.drawImage(img, bgRightX, farSrcY, bgRightW, farSrcH, Math.round(tx), 0, farDestW, farDestH);
+    }
+    // Fade bottom edge into next layer
+    const farFade = cx.createLinearGradient(0, farDestH - 60, 0, farDestH);
+    farFade.addColorStop(0, 'rgba(0,0,0,0)'); farFade.addColorStop(1, 'rgba(0,0,0,0.85)');
+    cx.fillStyle = farFade; cx.fillRect(0, 0, W, farDestH);
     cx.restore();
 
-    // Night overlay to darken/tint asset art
-    if (nf > 0) {
-      cx.fillStyle = `rgba(2,5,14,${nf * 0.55})`;
+    // Near layer — dark ruins (bottom row of right half)
+    const nearSrcY = 660, nearSrcH = 185;
+    const nearDestH = GY * 0.52;
+    const nearDestW = Math.round(bgRightW * nearDestH / nearSrcH);
+    SCROLL[1] = (SCROLL[1] + 0.32 * scrollMult + 0.05) % nearDestW;
+    cx.save();
+    cx.globalAlpha = 0.78;
+    const nearY = GY - nearDestH + 10;
+    for (let tx = -SCROLL[1]; tx < W + nearDestW; tx += nearDestW) {
+      cx.drawImage(img, bgRightX, nearSrcY, bgRightW, nearSrcH, Math.round(tx), nearY, nearDestW, nearDestH);
+    }
+    // Fade top of near layer
+    const nearFade = cx.createLinearGradient(0, nearY, 0, nearY + 55);
+    nearFade.addColorStop(0, 'rgba(0,0,0,0.85)'); nearFade.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.fillStyle = nearFade; cx.fillRect(0, nearY, W, 55);
+    cx.restore();
+
+    // Mask the seam between far/near layers with dark band
+    const seamY = GY * 0.63;
+    const seamG = cx.createLinearGradient(0, seamY - 30, 0, seamY + 30);
+    seamG.addColorStop(0, 'rgba(0,0,0,0)');
+    seamG.addColorStop(0.4, 'rgba(0,0,0,0.92)');
+    seamG.addColorStop(0.6, 'rgba(0,0,0,0.92)');
+    seamG.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.fillStyle = seamG; cx.fillRect(0, seamY - 30, W, 60);
+
+    // Overall night blue-black tint
+    cx.fillStyle = `rgba(2,4,14,${0.28 + nf * 0.35})`;
+    cx.fillRect(0, 0, W, GY);
+    if (nf < 0.5) {
+      cx.fillStyle = `rgba(20,12,5,${(1-nf)*0.2})`;
       cx.fillRect(0, 0, W, GY);
     }
   } else {
