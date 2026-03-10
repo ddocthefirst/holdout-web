@@ -25,37 +25,26 @@ canvas#bg { position: absolute; inset: 0; width: 100%; height: 100%; }
   pointer-events: none;
 }
 
-/* HUD — compact overlay, no title bar */
+/* ── Compact single-row HUD — dots + bars + resources ── */
 #hud {
-  padding: 8px 12px 4px;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.82) 70%, transparent);
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px 5px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.84) 60%, transparent);
 }
-.hud-title { display: none; } /* removed — saves 26px */
-.hud-chars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.hud-char { display: flex; flex-direction: column; gap: 1px; }
-.hud-name { font-size: 8px; letter-spacing: 1px; display: flex; justify-content: space-between; }
-.hud-name .role { color: #445; }
-.hud-name .name { color: #c8a96e; }
-.hud-name.dead .name { color: #333; text-decoration: line-through; }
-.bars { display: flex; flex-direction: column; gap: 1px; }
-.bar-row { display: flex; align-items: center; gap: 3px; }
-.bar-lbl { font-size: 7px; color: #445; width: 12px; }
-.bar-bg { flex: 1; height: 2px; background: rgba(255,255,255,0.07); border-radius: 1px; }
-.bar-f { height: 2px; border-radius: 1px; transition: width 0.5s ease; }
-.b-hp  { background: #7ac74f; }
-.b-fd  { background: #c8a96e; }
-.b-md  { background: #4a9eff; }
-
-/* Resources — inline, smaller */
-#res {
-  display: flex; justify-content: center; gap: 14px;
-  padding: 3px 12px;
-  background: rgba(0,0,0,0.38);
-  font-size: 9px; pointer-events: none;
-}
-.rv { display: flex; align-items: center; gap: 3px; }
-.ri { font-size: 10px; }
-.rn { color: #e8e0d0; }
+.hc { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.hc.rj { justify-content: flex-end; }
+.hc.dead .cdot { opacity: 0.18; }
+.hc.dead .bars3 { opacity: 0.15; }
+.cdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.bars3 { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 50px; }
+.b3b { height: 2px; background: rgba(255,255,255,0.07); border-radius: 1px; }
+.b3f { height: 2px; border-radius: 1px; transition: width 0.5s ease; }
+.b-hp { background: #7ac74f; }
+.b-fd { background: #c8a96e; }
+.b-md { background: #4a9eff; }
+.res-row { display: flex; align-items: center; gap: 3px; font-size: 9px; flex-shrink: 0; }
+.res-row .ri { font-size: 10px; line-height: 1; }
+.res-row .rn { color: #c8c0b0; margin-right: 4px; }
 
 #gap { flex: 1; }
 
@@ -84,25 +73,25 @@ canvas#bg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .ll.amb  { color: #c8a96e; }
 .ll.mor  { color: #a855f7; }
 
-/* Actions panel — compact, 2 per row max */
+/* Actions panel */
 #act {
-  padding: 5px 10px;
+  padding: 4px 8px 6px;
   background: rgba(0,0,0,0.88);
   pointer-events: all;
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: column; gap: 3px;
 }
-.btn-row { display: flex; gap: 4px; }
+.btn-row { display: flex; gap: 3px; }
 .ab {
-  flex: 1;
+  flex: 1; display: flex; align-items: center; gap: 5px;
   background: transparent; border: 1px solid #1e1e22;
   color: #667; font-family: 'Courier New', monospace;
-  font-size: 9px; padding: 5px 8px;
-  cursor: pointer; text-align: left; line-height: 1.3;
+  font-size: 9px; padding: 4px 7px;
+  cursor: pointer; line-height: 1.2;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 .ab:hover:not(:disabled) { border-color: #c8a96e; color: #c8a96e; background: rgba(200,169,110,0.05); }
 .ab:disabled { opacity: 0.2; cursor: default; }
-.ab .c { display: block; font-size: 8px; color: #445; margin-top: 1px; }
+.ab img.bi { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; opacity: 0.85; }
 .ab.full { flex: none; width: 100%; }
 .ab.blue { border-color: #1a2840; color: #4a9eff; }
 .ab.blue:hover:not(:disabled) { border-color: #4a9eff; background: rgba(74,158,255,0.06); color: #aac; }
@@ -210,33 +199,32 @@ canvas#bg { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 <div id="ui">
   <div id="hud">
-    <div class="hud-title">H O L D O U T</div>
-    <div class="hud-chars">
-      <div class="hud-char">
-        <div class="hud-name" id="mn"><span class="name">MARA</span><span class="role">scavenger</span></div>
-        <div class="bars">
-          <div class="bar-row"><span class="bar-lbl">HP</span><div class="bar-bg"><div class="bar-f b-hp" id="mhp" style="width:100%"></div></div></div>
-          <div class="bar-row"><span class="bar-lbl">FD</span><div class="bar-bg"><div class="bar-f b-fd" id="mfd" style="width:80%"></div></div></div>
-          <div class="bar-row"><span class="bar-lbl">MD</span><div class="bar-bg"><div class="bar-f b-md" id="mmd" style="width:90%"></div></div></div>
-        </div>
-      </div>
-      <div class="hud-char">
-        <div class="hud-name" id="en"><span class="name">ELI</span><span class="role">builder</span></div>
-        <div class="bars">
-          <div class="bar-row"><span class="bar-lbl">HP</span><div class="bar-bg"><div class="bar-f b-hp" id="ehp" style="width:100%"></div></div></div>
-          <div class="bar-row"><span class="bar-lbl">FD</span><div class="bar-bg"><div class="bar-f b-fd" id="efd" style="width:80%"></div></div></div>
-          <div class="bar-row"><span class="bar-lbl">MD</span><div class="bar-bg"><div class="bar-f b-md" id="emd" style="width:85%"></div></div></div>
-        </div>
+    <!-- Mara: amber dot + 3 bars -->
+    <div class="hc" id="mn">
+      <div class="cdot" style="background:#c8a96e;box-shadow:0 0 5px #c8a96e55"></div>
+      <div class="bars3">
+        <div class="b3b"><div class="b3f b-hp" id="mhp" style="width:100%"></div></div>
+        <div class="b3b"><div class="b3f b-fd" id="mfd" style="width:80%"></div></div>
+        <div class="b3b"><div class="b3f b-md" id="mmd" style="width:90%"></div></div>
       </div>
     </div>
-  </div>
-
-  <div id="res">
-    <div class="rv"><span class="ri">🍞</span><span class="rn" id="rf">8</span></div>
-    <div class="rv"><span class="ri">💊</span><span class="rn" id="rm">2</span></div>
-    <div class="rv"><span class="ri">🔩</span><span class="rn" id="rp">5</span></div>
-    <div class="rv"><span class="ri">🔋</span><span class="rn" id="ru">3</span></div>
-    <div class="rv"><span class="ri">🏚</span><span class="rn" id="rs">Lv1</span></div>
+    <!-- Resources inline -->
+    <div class="res-row">
+      <span class="ri">🍞</span><span class="rn" id="rf">8</span>
+      <span class="ri">💊</span><span class="rn" id="rm">2</span>
+      <span class="ri">🔩</span><span class="rn" id="rpt">5</span>
+      <span class="ri">🔋</span><span class="rn" id="ru">3</span>
+      <span class="ri">🏚</span><span class="rn" id="rs">Lv1</span>
+    </div>
+    <!-- Eli: 3 bars + blue dot -->
+    <div class="hc rj" id="en">
+      <div class="bars3">
+        <div class="b3b"><div class="b3f b-hp" id="ehp" style="width:100%"></div></div>
+        <div class="b3b"><div class="b3f b-fd" id="efd" style="width:80%"></div></div>
+        <div class="b3b"><div class="b3f b-md" id="emd" style="width:85%"></div></div>
+      </div>
+      <div class="cdot" style="background:#4a9eff;box-shadow:0 0 5px #4a9eff55"></div>
+    </div>
   </div>
 
   <div id="gap"></div>
@@ -253,15 +241,15 @@ canvas#bg { position: absolute; inset: 0; width: 100%; height: 100%; }
 
   <div id="act">
     <div class="btn-row">
-      <button class="ab" onclick="feedBoth()">🍞 Feed both<span class="c">−2 food</span></button>
-      <button class="ab" onclick="heal('mara')">💊 Treat Mara<span class="c">−1 meds</span></button>
+      <button class="ab" id="feedBtn" onclick="feedBoth()"><span id="feedIcon"></span>Feed</button>
+      <button class="ab" id="healMaraBtn" onclick="heal('mara')"><span id="healMaraIcon"></span>Mara +HP</button>
     </div>
     <div class="btn-row">
-      <button class="ab" onclick="heal('eli')">💊 Treat Eli<span class="c">−1 meds</span></button>
-      <button class="ab" onclick="build()">🔩 Fortify (Eli)<span class="c">−2 parts</span></button>
+      <button class="ab" id="healEliBtn" onclick="heal('eli')"><span id="healEliIcon"></span>Eli +HP</button>
+      <button class="ab" id="buildBtn" onclick="build()"><span id="buildIcon"></span>Fortify</button>
     </div>
-    <button class="ab full blue" id="sleepBtn" onclick="doRest()">💤 Both rest<span class="c">+mood · costs time</span></button>
-    <button class="ab full purple" id="phaseBtn" onclick="openPicker()">▸ SEND OUT TO SCAVENGE</button>
+    <button class="ab full blue" id="sleepBtn" onclick="doRest()"><span id="restIcon"></span>Rest</button>
+    <button class="ab full purple" id="phaseBtn" onclick="openPicker()">▸ SCAVENGE</button>
   </div>
 </div>
 
@@ -1209,21 +1197,21 @@ function bar(id, v) { const e=$(id); if(e) e.style.width = Math.max(0,Math.min(1
 function updateUI() {
   bar('mhp', S.mara.hp); bar('mfd', S.mara.fd); bar('mmd', S.mara.md);
   bar('ehp', S.eli.hp);  bar('efd', S.eli.fd);  bar('emd', S.eli.md);
-  set('rf', S.food); set('rm', S.meds); set('rp', S.parts); set('ru', S.fuel);
+  set('rf', S.food); set('rm', S.meds); set('rpt', S.parts); set('ru', S.fuel);
   set('rs', 'Lv' + S.shelter);
   set('dl', 'DAY ' + S.day);
   bar('mb', S.moral);
   set('mw', mword(S.moral));
   $('mw').style.color = S.moral>=65?'#7ac74f':S.moral>=35?'#c8a96e':'#e94560';
-  $('mn').className = 'hud-name' + (S.mara.alive?'':' dead');
-  $('en').className = 'hud-name' + (S.eli.alive?'':' dead');
+  $('mn').className = 'hc' + (S.mara.alive?'':' dead');
+  $('en').className = 'hc rj' + (S.eli.alive?'':' dead');
   // Phase button
   const pb = $('phaseBtn');
   if (S.phase === 'day') {
-    pb.textContent = '▸ SEND OUT TO SCAVENGE';
+    pb.textContent = '▸ SCAVENGE';
     pb.className = 'ab full purple';
   } else {
-    pb.textContent = '▸ RETURN — END NIGHT';
+    pb.textContent = '▸ RETURN';
     pb.className = 'ab full blue';
     pb.onclick = endNight;
   }
@@ -1553,8 +1541,49 @@ function reset() {
 // ── Loop ────────────────────────────────────────────────────────────────────
 (function loop(t) { drawBg(t); requestAnimationFrame(loop); })(0);
 // Load all assets (parallax layers, base interiors, sprite walk sheet) then init UI
+function makeAtlasIcon(animKey, size=24) {
+  const anim = ATLAS_ANIMS[animKey];
+  if (!ASSETS.atlas || !anim) return null;
+  const fr = anim.frames[0];
+  const oc = document.createElement('canvas');
+  oc.width = size; oc.height = size;
+  const ot = oc.getContext('2d');
+  ot.drawImage(ASSETS.atlas, fr.x, anim.y, fr.w, anim.h, 0, 0, size, size);
+  const id = ot.getImageData(0, 0, size, size);
+  const px = id.data;
+  const BG = ATLAS_BG;
+  for (let i = 0; i < px.length; i += 4) {
+    const d = Math.abs(px[i]-BG[0]) + Math.abs(px[i+1]-BG[1]) + Math.abs(px[i+2]-BG[2]);
+    if (d < 40) px[i+3] = 0;
+    else if (d < 70) px[i+3] = Math.round(px[i+3] * (d-40) / 30);
+  }
+  ot.putImageData(id, 0, 0);
+  return oc.toDataURL();
+}
+
+function initIcons() {
+  const map = [
+    ['feedIcon',     'cook'],
+    ['healMaraIcon', 'collect'],
+    ['healEliIcon',  'collect'],
+    ['buildIcon',    'hammer'],
+    ['restIcon',     'sleep'],
+  ];
+  map.forEach(([elId, animKey]) => {
+    const url = makeAtlasIcon(animKey, 22);
+    if (!url) return;
+    const el = $(elId);
+    if (!el) return;
+    const img = document.createElement('img');
+    img.src = url; img.className = 'bi';
+    el.replaceWith(img);
+    img.id = elId;
+  });
+}
+
 loadAssets(() => {
   loadSprites(() => {
+    initIcons();
     updateUI();
   });
 });
