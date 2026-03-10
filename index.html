@@ -333,9 +333,75 @@ const SPRITES = { mara: [], eli: [], action: [] };
 let spritesReady = false;
 
 // ── Asset images ─────────────────────────────────────────────────────────
-const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null, action2: null };
+const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null, action2: null, main: null };
 let assetsReady = 0;
-const ASSETS_TOTAL = 4;
+const ASSETS_TOTAL = 5;
+
+// ── sprites-main.jpg (1280×853) — new smooth animations on blue chroma-key bg ──
+// Layout (pixel-scanned dividers at y=3,224,261,429,455,632,818,835):
+//   Row 0 (y=4,  h=219, 10 frames): walk cycle — smooth full walk
+//   Row 1 (y=262,h=166, 10 frames): run / fast walk
+//   Row 2 (y=456,h=175, 10 frames): crouch-walk / sneak
+//   Backgrounds (y=633,h=184): 2 panoramas side by side (x=0,w=638 | x=642,w=638)
+//   Bottom strip (y=818,h=34): 2 thin panoramas
+const MAIN_ROWS = [
+  { y: 4,   h: 219, frames: 10, label: 'walk' },
+  { y: 262, h: 166, frames: 10, label: 'run' },
+  { y: 456, h: 175, frames: 10, label: 'crouch' },
+];
+const MAIN_FRAME_W = Math.round(1280 / 10); // 128px per frame
+const MAIN_BG = [
+  { sx: 0,   sy: 633, sw: 638, sh: 184 },  // panorama A (left)
+  { sx: 642, sy: 633, sw: 638, sh: 184 },  // panorama B (right)
+];
+
+// Chroma-key cache: sprites-main.jpg uses BLUE background (R<40,G<60,B>100,B>R*2)
+const _mainCache = new Map();
+function extractMainFrame(rowIdx, frameIdx, glow, targetH) {
+  const row = MAIN_ROWS[rowIdx];
+  if (!ASSETS.main || !row) return null;
+  const fi = Math.min(frameIdx, row.frames - 1);
+  const targetW = Math.round(MAIN_FRAME_W * targetH / row.h);
+  const cacheKey = `${rowIdx}_${fi}_${glow}_${targetH}`;
+  let cached = _mainCache.get(cacheKey);
+  if (cached) return cached;
+
+  const oc = document.createElement('canvas');
+  oc.width = targetW; oc.height = targetH;
+  const octx = oc.getContext('2d');
+  const sx = fi * MAIN_FRAME_W;
+  octx.drawImage(ASSETS.main, sx, row.y, MAIN_FRAME_W, row.h, 0, 0, targetW, targetH);
+
+  // Chroma-key: remove blue background (B dominant, B > R*2, B > G*1.5)
+  const id = octx.getImageData(0, 0, targetW, targetH);
+  const px = id.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i], g = px[i+1], b = px[i+2];
+    if (b > 80 && b > r * 1.8 && b > g * 1.5) {
+      // Blue background: fade by "blueness"
+      const blueStrength = Math.min(1, (b - Math.max(r,g)*1.5) / 80);
+      px[i+3] = Math.round(px[i+3] * (1 - blueStrength));
+    }
+  }
+  octx.putImageData(id, 0, 0);
+
+  // Tint with glow color
+  octx.globalCompositeOperation = 'source-in';
+  octx.fillStyle = glow;
+  octx.fillRect(0, 0, targetW, targetH);
+
+  _mainCache.set(cacheKey, oc);
+  return oc;
+}
+
+function drawMainSprite(ctx, x, y, rowIdx, frameIdx, glow, scale) {
+  const tinted = extractMainFrame(rowIdx, frameIdx, glow, scale || 90);
+  if (!tinted) return;
+  ctx.save();
+  ctx.shadowColor = glow; ctx.shadowBlur = 16;
+  ctx.drawImage(tinted, x - tinted.width/2, y - tinted.height);
+  ctx.restore();
+}
 
 // ── sprites-action2.jpg (1280×853) layout:
 //   Top ~75% = 3 rows of action sprites on BLACK bg (use screen blend = instant transparency)
@@ -398,6 +464,11 @@ function loadAssets(callback) {
   aimg.onload = () => { ASSETS.action2 = aimg; onLoad(); };
   aimg.onerror = onLoad;
   aimg.src = 'assets/sprites-action2.jpg';
+
+  const mimg = new Image();
+  mimg.onload = () => { ASSETS.main = mimg; onLoad(); };
+  mimg.onerror = onLoad;
+  mimg.src = 'assets/sprites-main.jpg';
 }
 
 // Draw an action sprite frame — extract to offscreen canvas, tint with glow color
@@ -534,10 +605,17 @@ function drawBg(t) {
 
   // ── Parallax background layers from actual art ──────────────────────────
   if (ASSETS.action2) {
-    // ── 4-layer parallax from sprites-action2.jpg panoramic strips ───────
-    // BG_STRIPS: 4 backgrounds (FAR/MID-FAR/MID-NEAR/NEAR) at bottom of image
-    // Stacked depth: FAR covers full sky, each closer layer sits lower and scrolls faster
+    // ── 4-layer parallax — prefer file_14 panoramas (higher quality) if loaded ──
     const img = ASSETS.action2;
+    // If file_14 loaded, substitute BG strips 0 and 1 with its richer panoramas
+    // Use action2 only for MID-NEAR and NEAR layers (left half, proven good)
+    // Use parallax.jpg for far layers (crescent moon + city)
+    const BG_ACTUAL = [
+      { sx:0, sy:42,  sw:640, sh:140, speed:0.06, _src:'parallax' },  // FAR: moon city (parallax.jpg)
+      { sx:0, sy:642, sw:638, sh:105, speed:0.14, _src:'parallax' },  // MID: ruins (parallax.jpg right)
+      { sx:0, sy:755, sw:638, sh:96,  speed:0.28, _src:'action2'  },  // MID-NEAR (action2)
+      { sx:0, sy:755, sw:638, sh:96,  speed:0.50, _src:'action2'  },  // NEAR (action2, offset)
+    ];
     const isScavenging = S.phase === 'night' || nightFade > 0.2;
     const scrollMult = isScavenging ? 1 : 0.15; // slow drift even at day
 
@@ -550,17 +628,18 @@ function drawBg(t) {
       [GY*0.60, 170, 0.85],  // NEAR: sits low
     ];
 
-    BG_STRIPS.forEach((strip, i) => {
+    BG_ACTUAL.forEach((strip, i) => {
       const [yDest, hDest, alpha] = layerPos[i];
       const dw = Math.round(strip.sw * hDest / strip.sh);
       SCROLL[i] = (SCROLL[i] + strip.speed * scrollMult) % dw;
+      // Select source image per layer
+      const srcImg = strip._src === 'parallax' ? (ASSETS.parallax || img) : img;
 
       cx.save();
       cx.globalAlpha = alpha;
-      // Clip strip to its destination rect
       cx.beginPath(); cx.rect(0, yDest, W, hDest); cx.clip();
       for (let tx = -SCROLL[i]; tx < W + dw; tx += dw) {
-        cx.drawImage(img, strip.sx, strip.sy, strip.sw, strip.sh,
+        cx.drawImage(srcImg, strip.sx, strip.sy, strip.sw, strip.sh,
                      Math.round(tx), yDest, dw, hDest);
       }
       // Feather top and bottom edges
@@ -740,27 +819,39 @@ function drawChars() {
     }
     maraWalk += 0.025; eliWalk += 0.025;
   } else {
+    // ── NIGHT: scavenger walks across screen, other waits at home ───────
+    const walkFn = (x, glow, wt) => {
+      if (ASSETS.main) {
+        // Use smooth 10-frame walk (row 0) or crouch-walk (row 2) for night
+        const rowIdx = nightFade > 0.6 ? 2 : 0; // crouch when fully dark
+        const fi = Math.abs(Math.floor(wt * 10)) % MAIN_ROWS[rowIdx].frames;
+        drawMainSprite(cx, x, GY, rowIdx, fi, glow, 92);
+      } else {
+        charSprite(cx, x, GY, wt, glow, glow === '#c8a96e' ? SPRITES.mara : SPRITES.eli,
+                   glow === '#c8a96e' ? 'mara' : 'eli');
+      }
+    };
+
     if (scaver !== 'eli' && S.mara.alive) {
       scavX += 0.5; if (scavX > W+60) scavX = -60;
       maraWalk += 0.14;
-      charSprite(cx, scavX, GY, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
+      walkFn(scavX, '#c8a96e', maraWalk);
     }
     if (scaver === 'eli' && S.eli.alive) {
       scavX += 0.4; if (scavX > W+60) scavX = -60;
       eliWalk += 0.12;
-      charSprite(cx, scavX, GY, eliWalk, '#4a9eff', SPRITES.eli, 'eli');
+      walkFn(scavX, '#4a9eff', eliWalk);
     }
     if (scaver === 'both') {
       scavX += 0.45; if (scavX > W+60) scavX = -60;
       maraWalk += 0.13; eliWalk += 0.13;
-      if (S.mara.alive) charSprite(cx, scavX - 24, GY, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
-      if (S.eli.alive)  charSprite(cx, scavX + 12, GY, eliWalk,  '#4a9eff', SPRITES.eli,  'eli');
+      if (S.mara.alive) walkFn(scavX - 24, '#c8a96e', maraWalk);
+      if (S.eli.alive)  walkFn(scavX + 12, '#4a9eff', eliWalk);
     }
     const home = scaver === 'mara' ? 'eli' : scaver === 'eli' ? 'mara' : null;
     if (home && S[home].alive) {
       const homeGlow = home === 'mara' ? '#c8a96e' : '#4a9eff';
       if (ASSETS.action2) {
-        // Seated/waiting pose for the one who stayed home
         drawActionSprite(cx, 55, GY, 2, 0, homeGlow, 72);
       } else {
         charSmall(cx, 58, GY - 50);
