@@ -368,22 +368,46 @@ function drawCleanSprite(ctx, x, y, rowIdx, frameIdx, scale) {
     const oc = document.createElement('canvas');
     oc.width = targetW; oc.height = targetH;
     const octx = oc.getContext('2d');
-    // Draw exact frame using pixel-scanned bounds
     octx.drawImage(ASSETS.walkClean, frame.x, row.y, frame.w, row.h, 0, 0, targetW, targetH);
-    // Remove white background: lum > 215 → transparent, 180-215 → fade
     const id = octx.getImageData(0, 0, targetW, targetH);
     const px = id.data;
-    for (let i = 0; i < px.length; i += 4) {
-      const lum = px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114;
-      if (lum > 215) { px[i+3] = 0; }
-      else if (lum > 170) { px[i+3] = Math.round(px[i+3] * (215-lum)/45); }
+    const W2 = targetW, H2 = targetH;
+
+    // ── Edge-flood-fill to find background (exterior) white pixels ──────
+    // Only removes white that's connected to the image border — preserves interior whites (eyes!)
+    const visited = new Uint8Array(W2 * H2);
+    const queue = [];
+    const enqueue = (xi, yi) => {
+      const idx = yi * W2 + xi;
+      if (xi < 0 || xi >= W2 || yi < 0 || yi >= H2 || visited[idx]) return;
+      const pi = idx * 4;
+      const lum = px[pi]*0.299 + px[pi+1]*0.587 + px[pi+2]*0.114;
+      if (lum > 190) { visited[idx] = 1; queue.push(xi, yi); }
+    };
+    // Seed from all 4 edges
+    for (let xi = 0; xi < W2; xi++) { enqueue(xi, 0); enqueue(xi, H2-1); }
+    for (let yi = 0; yi < H2; yi++) { enqueue(0, yi); enqueue(W2-1, yi); }
+    // BFS
+    for (let qi = 0; qi < queue.length; qi += 2) {
+      const cx2 = queue[qi], cy2 = queue[qi+1];
+      enqueue(cx2+1, cy2); enqueue(cx2-1, cy2);
+      enqueue(cx2, cy2+1); enqueue(cx2, cy2-1);
+    }
+    // Apply: background-connected white → transparent; interior white (eyes) kept
+    for (let i = 0; i < W2 * H2; i++) {
+      if (visited[i]) {
+        const pi = i * 4;
+        const lum = px[pi]*0.299 + px[pi+1]*0.587 + px[pi+2]*0.114;
+        if (lum > 210) px[pi+3] = 0;
+        else if (lum > 170) px[pi+3] = Math.round(px[pi+3] * (210-lum)/40);
+      }
     }
     octx.putImageData(id, 0, 0);
     cached = oc;
     _cleanCache.set(key, cached);
   }
   ctx.save();
-  ctx.filter = 'brightness(1.4) contrast(1.1)'; // lift for visibility
+  ctx.filter = 'brightness(1.3) contrast(1.1)';
   ctx.drawImage(cached, x - targetW/2, y - targetH);
   ctx.restore();
 }
@@ -669,95 +693,76 @@ function drawBg(t) {
     cx.globalAlpha = 1;
   }
 
-  // ── Parallax background layers from actual art ──────────────────────────
-  if (ASSETS.action2) {
-    // ── 4-layer parallax — prefer file_14 panoramas (higher quality) if loaded ──
-    const img = ASSETS.action2;
-    // If file_14 loaded, substitute BG strips 0 and 1 with its richer panoramas
-    // Use action2 only for MID-NEAR and NEAR layers (left half, proven good)
-    // Use parallax.jpg for far layers (crescent moon + city)
-    const BG_ACTUAL = [
-      { sx:0, sy:42,  sw:640, sh:140, speed:0.06, _src:'parallax' },  // FAR: moon city (parallax.jpg)
-      { sx:0, sy:642, sw:638, sh:105, speed:0.14, _src:'parallax' },  // MID: ruins (parallax.jpg right)
-      { sx:0, sy:755, sw:638, sh:96,  speed:0.28, _src:'action2'  },  // MID-NEAR (action2)
-      { sx:0, sy:755, sw:638, sh:96,  speed:0.50, _src:'action2'  },  // NEAR (action2, offset)
-    ];
-    const isScavenging = S.phase === 'night' || nightFade > 0.2;
-    const scrollMult = isScavenging ? 1 : 0.15; // slow drift even at day
+  // ── Outdoor scavenging background (clean, seam-free) ─────────────────────
+  // Removed stacked-strip rendering (looked banded/terrible).
+  // Use crisp procedural night skyline + optional light texture from parallax art.
 
-    // Layer destinations: [yDest, hDest, alpha]
-    // Keep strip heights proportional (src ~635×100 → scale to ~200px tall max)
-    const layerPos = [
-      [0,       200, 0.90],  // FAR: full brightness
-      [GY*0.30, 190, 0.92],  // MID-FAR
-      [GY*0.50, 180, 0.92],  // MID-NEAR
-      [GY*0.60, 170, 0.95],  // NEAR: most prominent
-    ];
+  // Far buildings
+  BLD_FAR.forEach(b => {
+    const by = GY - b.h;
+    cx.fillStyle = rgb(lerp3([10,14,22],[4,6,11],nf));
+    cx.fillRect(b.x, by, b.w, b.h);
+  });
 
-    BG_ACTUAL.forEach((strip, i) => {
-      const [yDest, hDest, alpha] = layerPos[i];
-      const dw = Math.round(strip.sw * hDest / strip.sh);
-      SCROLL[i] = (SCROLL[i] + strip.speed * scrollMult) % dw;
-      // Select source image per layer
-      const srcImg = strip._src === 'parallax' ? (ASSETS.parallax || img) : img;
-
-      cx.save();
-      cx.globalAlpha = alpha;
-      cx.beginPath(); cx.rect(0, yDest, W, hDest); cx.clip();
-      for (let tx = -SCROLL[i]; tx < W + dw; tx += dw) {
-        cx.drawImage(srcImg, strip.sx, strip.sy, strip.sw, strip.sh,
-                     Math.round(tx), yDest, dw, hDest);
-      }
-      // Feather top and bottom edges
-      if (i > 0) {
-        const tg = cx.createLinearGradient(0, yDest, 0, yDest + 50);
-        tg.addColorStop(0, 'rgba(0,0,0,0.88)'); tg.addColorStop(1, 'rgba(0,0,0,0)');
-        cx.fillStyle = tg; cx.fillRect(0, yDest, W, 50);
-      }
-      const bg2 = cx.createLinearGradient(0, yDest + hDest - 40, 0, yDest + hDest);
-      bg2.addColorStop(0, 'rgba(0,0,0,0)'); bg2.addColorStop(1, 'rgba(0,0,0,0.7)');
-      cx.fillStyle = bg2; cx.fillRect(0, yDest + hDest - 40, W, 40);
-      cx.restore();
+  // Mid buildings + sparse lit windows
+  BLD_MID.forEach(b => {
+    cx.fillStyle = rgb(lerp3([7,10,16],[3,4,8],nf));
+    cx.fillRect(b.x, GY - b.h, b.w, b.h);
+    b.wins.forEach(wi => {
+      if (!wi.lit) return;
+      const wx = b.x + 4 + wi.ox * (b.w - 10);
+      const wy = (GY - b.h) + 4 + wi.oy * (b.h - 10);
+      const ww = 2 + (wi.ox * 2);
+      const wh = 2 + (wi.oy * 2);
+      cx.fillStyle = `rgba(255,210,120,${0.20 + 0.18*Math.sin(T*2 + wx*0.03)})`;
+      cx.fillRect(wx, wy, ww, wh);
     });
+  });
 
-    // Very subtle night tint only — let background art show naturally
-    if (nf > 0.3) {
-      cx.fillStyle = `rgba(2,6,18,${(nf - 0.3) * 0.25})`;
-      cx.fillRect(0, 0, W, GY);
-    }
-  } else if (ASSETS.parallax) {
-    // Fallback: old parallax.jpg single strip
+  // Optional subtle texture overlay from parallax (single clean crop, low alpha)
+  if (ASSETS.parallax) {
     const img = ASSETS.parallax;
-    const bgSrcW = 640, bgSrcH = 853, bgDestH = GY;
-    const bgDestW = Math.round(bgSrcW * bgDestH / bgSrcH);
-    SCROLL[0] = (SCROLL[0] + 0.15) % bgDestW;
-    cx.save(); cx.globalAlpha = 0.65;
-    for (let tx = -SCROLL[0]; tx < W + bgDestW; tx += bgDestW)
-      cx.drawImage(img, 0, 0, bgSrcW, bgSrcH, Math.round(tx), 0, bgDestW, bgDestH);
+    const srcX = 640, srcW = 640;
+
+    // Mid strip: house/rain
+    const y1 = 120, h1 = 220, srcY1 = 240, srcH1 = 105;
+    const dw1 = Math.round(srcW * h1 / srcH1);
+    SCROLL[0] = (SCROLL[0] + 0.12) % dw1;
+    const bx1 = -Math.round(SCROLL[0]);
+    cx.save();
+    cx.globalAlpha = 0.24;
+    cx.drawImage(img, srcX, srcY1, srcW, srcH1, bx1, y1, dw1, h1);
+    if (bx1 + dw1 < W) cx.drawImage(img, srcX, srcY1, srcW, srcH1, bx1 + dw1, y1, dw1, h1);
     cx.restore();
-    // Only a very light tint in fallback mode
-    if (nf > 0.4) { cx.fillStyle = `rgba(2,4,14,${(nf-0.4)*0.2})`; cx.fillRect(0,0,W,GY); }
-  } else {
-    // Fallback: procedural buildings
-    BLD_FAR.forEach(b => {
-      const by = GY - b.h;
-      cx.fillStyle = rgb(lerp3([7,9,14],[3,4,7],nf));
-      cx.fillRect(b.x, by, b.w, b.h);
-    });
-    BLD_MID.forEach(b => {
-      cx.fillStyle = rgb(lerp3([5,7,11],[2,3,5],nf));
-      cx.fillRect(b.x, GY - b.h, b.w, b.h);
-    });
+
+    // Lower strip: ruins/forest to avoid empty dark mid-lower area
+    const y2 = 320, h2 = 210, srcY2 = 380, srcH2 = 115;
+    const dw2 = Math.round(srcW * h2 / srcH2);
+    SCROLL[1] = (SCROLL[1] + 0.18) % dw2;
+    const bx2 = -Math.round(SCROLL[1]);
+    cx.save();
+    cx.globalAlpha = 0.20;
+    cx.drawImage(img, srcX, srcY2, srcW, srcH2, bx2, y2, dw2, h2);
+    if (bx2 + dw2 < W) cx.drawImage(img, srcX, srcY2, srcW, srcH2, bx2 + dw2, y2, dw2, h2);
+    cx.restore();
+
+    // Blend the join between the two strips so there is no hard seam
+    const seamY = y2;
+    const gSeam = cx.createLinearGradient(0, seamY - 26, 0, seamY + 26);
+    gSeam.addColorStop(0, 'rgba(2,6,16,0)');
+    gSeam.addColorStop(0.5, 'rgba(2,6,16,0.22)');
+    gSeam.addColorStop(1, 'rgba(2,6,16,0)');
+    cx.fillStyle = gSeam;
+    cx.fillRect(0, seamY - 26, W, 52);
   }
 
-  // Night: shelter exterior (small window view of outside)
-  drawShelterExterior();
-
-  // Foreground silhouettes (keep for depth)
-  BLD_FG.forEach(b => {
-    cx.fillStyle = rgb(lerp3([3,3,5],[1,2,4],nf));
-    cx.fillRect(b.x, GY - b.h, b.w, b.h);
-  });
+  // Dark ground strip at base for character contrast
+  const groundGrad = cx.createLinearGradient(0, GY - 30, 0, H);
+  groundGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  groundGrad.addColorStop(0.3, `rgba(2,4,10,${0.5 + nf*0.3})`);
+  groundGrad.addColorStop(1, `rgba(1,2,6,${0.8 + nf*0.15})`);
+  cx.fillStyle = groundGrad;
+  cx.fillRect(0, GY - 30, W, H - GY + 30);
 
   // Ground line
   cx.strokeStyle = `rgba(74,158,255,${0.06 + nf*0.04})`;
