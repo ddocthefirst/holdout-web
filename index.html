@@ -648,143 +648,107 @@ function drawBg(t) {
     return; // skip all outdoor rendering
   }
 
-  // Sky
-  const sk = cx.createLinearGradient(0, 0, 0, GY);
-  const dc1 = lerp3([6,14,40], [2,5,18], nf);
-  const dc2 = lerp3([14,26,58], [8,12,28], nf);
-  sk.addColorStop(0, rgb(dc1));
-  sk.addColorStop(1, rgb(dc2));
-  cx.fillStyle = sk; cx.fillRect(0, 0, W, GY);
+  // The outdoor scavenging scene draws its own full sky — skip blue sky/moon/stars
+  // (those are only relevant for a shelter-window night view which we no longer use)
 
-  // Ground
-  cx.fillStyle = rgb(lerp3([8,10,18],[4,5,10],nf));
-  cx.fillRect(0, GY, W, H - GY);
+  // ── Outdoor scavenging — post-apocalyptic amber ruins (matches reference) ──
+  // Reference: TWoM-style side-scroller — amber/golden sky, ruined city silhouettes,
+  // rubble foreground, cracked ground. NOT dark night — daytime/dusk dramatic.
+  {
+    const scavGY = Math.round(H * 0.72); // ground horizon line
 
-  // Moon (night)
-  if (nf > 0.1) {
-    const ma = nf * 0.9;
-    const mg = cx.createRadialGradient(W*0.76,52,0,W*0.76,52,70);
-    mg.addColorStop(0, `rgba(200,220,255,${0.15*ma})`);
-    mg.addColorStop(1, 'transparent');
-    cx.fillStyle = mg; cx.fillRect(0,0,W,H);
-    cx.globalAlpha = ma * 0.88;
-    cx.beginPath(); cx.arc(W*0.76, 52, 17, 0, Math.PI*2);
-    cx.fillStyle = 'rgba(220,230,255,0.9)'; cx.fill();
-    cx.globalAlpha = 1;
-  }
+    // Sky: amber/dusk gradient (dark top → rich amber mid → dusty tan low)
+    const sky = cx.createLinearGradient(0, 0, 0, scavGY);
+    sky.addColorStop(0,    '#0a0604');
+    sky.addColorStop(0.15, '#1c0e06');
+    sky.addColorStop(0.45, '#5a2c0a');
+    sky.addColorStop(0.75, '#8c4a12');
+    sky.addColorStop(1,    '#a06018');
+    cx.fillStyle = sky; cx.fillRect(0, 0, W, scavGY);
 
-  // Sun glow (day)
-  if (nf < 0.9) {
-    const sa = (1-nf) * 0.7;
-    const sg = cx.createRadialGradient(W*0.25, 80, 0, W*0.25, 80, 100);
-    sg.addColorStop(0, `rgba(240,180,80,${0.12*sa})`);
-    sg.addColorStop(1, 'transparent');
-    cx.fillStyle = sg; cx.fillRect(0,0,W,H);
-  }
+    // Ground: cracked earth / rubble tone
+    const grd = cx.createLinearGradient(0, scavGY, 0, H);
+    grd.addColorStop(0, '#3a2208');
+    grd.addColorStop(0.4, '#251608');
+    grd.addColorStop(1,   '#100a04');
+    cx.fillStyle = grd; cx.fillRect(0, scavGY, W, H - scavGY);
 
-  // Stars (night)
-  if (nf > 0.3) {
-    cx.fillStyle = 'rgba(210,225,255,0.8)';
-    for (let i = 0; i < 45; i++) {
-      const sx = ((i*137.5)%1)*W, sy = ((i*97.3)%0.38)*GY;
-      cx.globalAlpha = nf * (Math.sin(T*1.5+i)*0.3+0.7) * 0.8;
-      cx.fillRect(sx, sy, 1, 1);
+    // Distant ruined city silhouettes (scroll very slowly)
+    SCROLL[0] = (SCROLL[0] + 0.06) % (W * 2);
+    const off0 = -Math.round(SCROLL[0]);
+    cx.save();
+    const farBlds = Array.from({length:22}, (_, i) => ({
+      x: i * 50 - 10, w: 18 + (i*11)%34, h: 60 + (i*17)%180
+    }));
+    farBlds.forEach(b => {
+      const bx = ((b.x + off0) % (W*2) + W*2) % (W*2) - W/2;
+      cx.fillStyle = '#1a0c04';
+      cx.fillRect(bx, scavGY - b.h, b.w, b.h);
+    });
+    cx.restore();
+
+    // Mid-distance: damaged low structures, rubble (scroll medium)
+    SCROLL[1] = (SCROLL[1] + 0.15) % (W * 2.5);
+    const off1 = -Math.round(SCROLL[1]);
+    const midStructs = [
+      {x:0,  w:70,  h:90},  {x:90, w:120, h:50},  {x:230, w:45, h:110},
+      {x:290, w:90, h:40},  {x:390, w:55, h:75},  {x:460, w:100, h:55},
+      {x:560, w:65, h:95},  {x:630, w:110, h:45}, {x:750, w:50, h:80},
+      {x:810, w:130, h:60}, {x:940, w:70, h:100}, {x:1020,w:90, h:55},
+    ];
+    cx.save();
+    midStructs.forEach(b => {
+      const bx = ((b.x + off1) % (W*2.5) + W*2.5) % (W*2.5) - W/2;
+      cx.fillStyle = '#2a1606';
+      cx.fillRect(bx, scavGY - b.h, b.w, b.h);
+      // Broken top edge detail
+      cx.fillStyle = '#1e1004';
+      cx.fillRect(bx + 2, scavGY - b.h - 4, b.w * 0.3, 6);
+      cx.fillRect(bx + b.w * 0.6, scavGY - b.h - 3, b.w * 0.2, 4);
+    });
+    // Wrecked car (scrolls with mid layer)
+    const carX = ((110 + off1) % (W*2.5) + W*2.5) % (W*2.5) - W/2;
+    cx.fillStyle = '#2e1808';
+    cx.fillRect(carX, scavGY - 38, 90, 32);
+    cx.fillRect(carX + 10, scavGY - 52, 60, 18);
+    cx.fillStyle = '#1a0e04';
+    cx.beginPath(); cx.ellipse(carX+16, scavGY-6, 14, 10, 0, 0, Math.PI*2); cx.fill();
+    cx.beginPath(); cx.ellipse(carX+74, scavGY-6, 14, 10, 0, 0, Math.PI*2); cx.fill();
+    cx.restore();
+
+    // Near foreground: rubble chunks and debris (scroll fastest)
+    SCROLL[2] = (SCROLL[2] + 0.35) % (W * 3);
+    const off2 = -Math.round(SCROLL[2]);
+    const debris = Array.from({length:20}, (_, i) => ({
+      x: i * 52 + (i*13)%30, w: 12+(i*7)%28, h: 8+(i*11)%22
+    }));
+    cx.save();
+    debris.forEach(d => {
+      const dx = ((d.x + off2) % (W*3) + W*3) % (W*3) - 20;
+      cx.fillStyle = '#2a1608';
+      cx.fillRect(dx, scavGY - d.h + 10, d.w, d.h);
+    });
+    cx.restore();
+
+    // Cracked ground texture lines
+    cx.save();
+    cx.strokeStyle = 'rgba(0,0,0,0.28)'; cx.lineWidth = 1;
+    for (let i = 0; i < 8; i++) {
+      const gx = ((i * 60 + SCROLL[2]*0.4) % W);
+      cx.beginPath(); cx.moveTo(gx, scavGY + 5);
+      cx.lineTo(gx + 30 + i*8, scavGY + 40 + i*6); cx.stroke();
     }
-    cx.globalAlpha = 1;
-  }
-
-  // ── Outdoor scavenging background (clean, seam-free) ─────────────────────
-  // Removed stacked-strip rendering (looked banded/terrible).
-  // Use crisp procedural night skyline + optional light texture from parallax art.
-
-  // Far buildings
-  BLD_FAR.forEach(b => {
-    const by = GY - b.h;
-    cx.fillStyle = rgb(lerp3([10,14,22],[4,6,11],nf));
-    cx.fillRect(b.x, by, b.w, b.h);
-  });
-
-  // Mid buildings + sparse lit windows
-  BLD_MID.forEach(b => {
-    cx.fillStyle = rgb(lerp3([7,10,16],[3,4,8],nf));
-    cx.fillRect(b.x, GY - b.h, b.w, b.h);
-    b.wins.forEach(wi => {
-      if (!wi.lit) return;
-      const wx = b.x + 4 + wi.ox * (b.w - 10);
-      const wy = (GY - b.h) + 4 + wi.oy * (b.h - 10);
-      const ww = 2 + (wi.ox * 2);
-      const wh = 2 + (wi.oy * 2);
-      cx.fillStyle = `rgba(255,210,120,${0.20 + 0.18*Math.sin(T*2 + wx*0.03)})`;
-      cx.fillRect(wx, wy, ww, wh);
-    });
-  });
-
-  // Optional subtle texture overlay from parallax (single clean crop, low alpha)
-  if (ASSETS.parallax) {
-    const img = ASSETS.parallax;
-    const srcX = 640, srcW = 640;
-
-    // Mid strip: house/rain
-    const y1 = 120, h1 = 220, srcY1 = 240, srcH1 = 105;
-    const dw1 = Math.round(srcW * h1 / srcH1);
-    SCROLL[0] = (SCROLL[0] + 0.12) % dw1;
-    const bx1 = -Math.round(SCROLL[0]);
-    cx.save();
-    cx.globalAlpha = 0.24;
-    cx.drawImage(img, srcX, srcY1, srcW, srcH1, bx1, y1, dw1, h1);
-    if (bx1 + dw1 < W) cx.drawImage(img, srcX, srcY1, srcW, srcH1, bx1 + dw1, y1, dw1, h1);
     cx.restore();
 
-    // Lower strip: ruins/forest to avoid empty dark mid-lower area
-    const y2 = 320, h2 = 210, srcY2 = 380, srcH2 = 115;
-    const dw2 = Math.round(srcW * h2 / srcH2);
-    SCROLL[1] = (SCROLL[1] + 0.18) % dw2;
-    const bx2 = -Math.round(SCROLL[1]);
-    cx.save();
-    cx.globalAlpha = 0.20;
-    cx.drawImage(img, srcX, srcY2, srcW, srcH2, bx2, y2, dw2, h2);
-    if (bx2 + dw2 < W) cx.drawImage(img, srcX, srcY2, srcW, srcH2, bx2 + dw2, y2, dw2, h2);
-    cx.restore();
-
-    // Blend the join between the two strips so there is no hard seam
-    const seamY = y2;
-    const gSeam = cx.createLinearGradient(0, seamY - 26, 0, seamY + 26);
-    gSeam.addColorStop(0, 'rgba(2,6,16,0)');
-    gSeam.addColorStop(0.5, 'rgba(2,6,16,0.22)');
-    gSeam.addColorStop(1, 'rgba(2,6,16,0)');
-    cx.fillStyle = gSeam;
-    cx.fillRect(0, seamY - 26, W, 52);
+    // Atmospheric dust/haze
+    const haze = cx.createLinearGradient(0, scavGY - 80, 0, scavGY + 60);
+    haze.addColorStop(0, 'rgba(100,50,10,0)');
+    haze.addColorStop(0.5, 'rgba(80,40,8,0.12)');
+    haze.addColorStop(1, 'rgba(30,15,4,0)');
+    cx.fillStyle = haze; cx.fillRect(0, scavGY - 80, W, 140);
   }
 
-  // Dark ground strip at base for character contrast
-  const groundGrad = cx.createLinearGradient(0, GY - 30, 0, H);
-  groundGrad.addColorStop(0, 'rgba(0,0,0,0)');
-  groundGrad.addColorStop(0.3, `rgba(2,4,10,${0.5 + nf*0.3})`);
-  groundGrad.addColorStop(1, `rgba(1,2,6,${0.8 + nf*0.15})`);
-  cx.fillStyle = groundGrad;
-  cx.fillRect(0, GY - 30, W, H - GY + 30);
-
-  // Ground line
-  cx.strokeStyle = `rgba(74,158,255,${0.06 + nf*0.04})`;
-  cx.lineWidth = 1;
-  cx.beginPath(); cx.moveTo(0,GY); cx.lineTo(W,GY); cx.stroke();
-
-  // Rain (night)
-  if (nf > 0.15) {
-    cx.lineWidth = 1;
-    RAIN.forEach(r => {
-      r.y += r.spd; r.x -= 1.8;
-      if (r.y > H) { r.y = -r.len; r.x = Math.random()*W; }
-      cx.strokeStyle = `rgba(120,160,240,${r.a * nf})`;
-      cx.beginPath(); cx.moveTo(r.x,r.y); cx.lineTo(r.x-2,r.y+r.len); cx.stroke();
-    });
-    cx.lineWidth = 1;
-    // Puddles
-    cx.fillStyle = `rgba(74,158,255,${0.04*nf})`;
-    [80,220,330].forEach((px,i) => cx.fillRect(px, GY+1+i, 45+i*10, 3));
-  }
-
-  // Characters
+  // Characters drawn on top of scavenging scene
   drawChars();
 
   // Night fade
@@ -852,31 +816,38 @@ function drawChars() {
     // Eli: seated crafting (row 2) — animate between frame 0-2
     const actionT = Math.floor(T * 2) % 6;
 
-    // DAY: characters stand on room floor — room art floor at ~70% of scaled height
-    // Room image scaled to H=820, floor at ~y 590-600
-    const dayFloor = Math.round(H * 0.72);
+    // DAY: two characters in room — sprite frames ≈1:1 aspect, so height controls width too
+    // At charH=160px → charW≈160px → two chars at x=100,x=310 fit cleanly on 420px canvas
+    const dayFloor = GY + 8;  // stand on the ground line
+    const charH = 160;
     if (S.mara.alive) {
-      const mFr = Math.floor(T * 2) % 8;
-      if (ASSETS.walkClean) drawCleanSprite(cx, 140, dayFloor, 0, mFr, 115);
-      else charSprite(cx, 140, dayFloor, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
+      const mFr = Math.floor(T * 1.8) % 8;
+      if (ASSETS.walkClean) drawCleanSprite(cx, 105, dayFloor, 0, mFr, charH);
+      else charSprite(cx, 105, dayFloor, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
     }
     if (S.eli.alive) {
-      const eFr = (Math.floor(T * 2) + 4) % 8;
-      if (ASSETS.walkClean) drawCleanSprite(cx, 275, dayFloor, 0, eFr, 115);
-      else charSprite(cx, 275, dayFloor, eliWalk*0.5, '#4a9eff', SPRITES.eli, 'eli');
+      const eFr = (Math.floor(T * 1.8) + 4) % 8;
+      if (ASSETS.walkClean) drawCleanSprite(cx, 315, dayFloor, 0, eFr, charH);
+      else charSprite(cx, 315, dayFloor, eliWalk*0.5, '#4a9eff', SPRITES.eli, 'eli');
     }
     maraWalk += 0.025; eliWalk += 0.025;
   } else {
     // ── NIGHT: scavenger walks across screen, other waits at home ───────
+    // Scavenging: solo character, larger than base (single char so more room)
+    // charH=180 → charW≈180px, leaves room on both sides of 420px canvas
+    const scavCharH = 180;
+    const scavFloor = Math.round(H * 0.72) + 10; // outdoor ground horizon
     const walkFn = (x, glow, wt) => {
+      // Use run row (3) when moving fast, walk (0) otherwise, crouch (2) when sneaking
+      const speed = Math.abs(scavX - (scavX || W/2));
+      const rowIdx = nightFade > 0.8 ? 2 : (wt > 0.4 ? 3 : 0);
+      const fi = Math.abs(Math.floor(wt * 8)) % CLEAN_ROWS[rowIdx < CLEAN_ROWS.length ? rowIdx : 0].frames;
       if (ASSETS.walkClean) {
-        const rowIdx = nightFade > 0.6 ? 2 : 0; // crouch when fully dark, walk otherwise
-        const fi = Math.abs(Math.floor(wt * 8)) % CLEAN_ROWS[rowIdx].frames;
-        drawCleanSprite(cx, x, GY, rowIdx, fi, 100);
+        drawCleanSprite(cx, x, scavFloor, rowIdx < CLEAN_ROWS.length ? rowIdx : 0, fi, scavCharH);
       } else if (ASSETS.main) {
-        const rowIdx = nightFade > 0.6 ? 2 : 0;
-        const fi = Math.abs(Math.floor(wt * 10)) % MAIN_ROWS[rowIdx].frames;
-        drawMainSprite(cx, x, GY, rowIdx, fi, glow, 92);
+        const mRowIdx = nightFade > 0.6 ? 2 : 0;
+        const mFi = Math.abs(Math.floor(wt * 10)) % MAIN_ROWS[mRowIdx].frames;
+        drawMainSprite(cx, x, GY, mRowIdx, mFi, glow, 92);
       } else {
         charSprite(cx, x, GY, wt, glow, glow === '#c8a96e' ? SPRITES.mara : SPRITES.eli,
                    glow === '#c8a96e' ? 'mara' : 'eli');
