@@ -614,10 +614,10 @@ function drawBg(t) {
     // Layer destinations: [yDest, hDest, alpha]
     // Keep strip heights proportional (src ~635×100 → scale to ~200px tall max)
     const layerPos = [
-      [0,       200, 0.70],  // FAR:      sky area
-      [GY*0.30, 190, 0.75],  // MID-FAR:  overlap for depth
-      [GY*0.50, 180, 0.80],  // MID-NEAR
-      [GY*0.60, 170, 0.85],  // NEAR: sits low
+      [0,       200, 0.90],  // FAR: full brightness
+      [GY*0.30, 190, 0.92],  // MID-FAR
+      [GY*0.50, 180, 0.92],  // MID-NEAR
+      [GY*0.60, 170, 0.95],  // NEAR: most prominent
     ];
 
     BG_ACTUAL.forEach((strip, i) => {
@@ -646,11 +646,9 @@ function drawBg(t) {
       cx.restore();
     });
 
-    // Night/day colour tint over all layers
-    cx.fillStyle = `rgba(2,4,14,${0.22 + nf * 0.38})`;
-    cx.fillRect(0, 0, W, GY);
-    if (nf < 0.5) {
-      cx.fillStyle = `rgba(15,8,3,${(1-nf)*0.18})`;
+    // Very subtle night tint only — let background art show naturally
+    if (nf > 0.3) {
+      cx.fillStyle = `rgba(2,6,18,${(nf - 0.3) * 0.25})`;
       cx.fillRect(0, 0, W, GY);
     }
   } else if (ASSETS.parallax) {
@@ -663,7 +661,8 @@ function drawBg(t) {
     for (let tx = -SCROLL[0]; tx < W + bgDestW; tx += bgDestW)
       cx.drawImage(img, 0, 0, bgSrcW, bgSrcH, Math.round(tx), 0, bgDestW, bgDestH);
     cx.restore();
-    cx.fillStyle = `rgba(2,4,14,${0.3 + nf*0.35})`; cx.fillRect(0,0,W,GY);
+    // Only a very light tint in fallback mode
+    if (nf > 0.4) { cx.fillStyle = `rgba(2,4,14,${(nf-0.4)*0.2})`; cx.fillRect(0,0,W,GY); }
   } else {
     // Fallback: procedural buildings
     BLD_FAR.forEach(b => {
@@ -728,10 +727,10 @@ function drawShelterInterior() {
     cx.drawImage(img, 0, crop.sy, 1280, crop.sh, 0, dy, dw, dh);
     // Subtle vignette overlay to blend edges
     const vg = cx.createLinearGradient(0, dy, 0, GY);
-    vg.addColorStop(0, 'rgba(0,0,0,0.55)');
-    vg.addColorStop(0.15, 'rgba(0,0,0,0)');
-    vg.addColorStop(0.85, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.35)');
+    vg.addColorStop(0, 'rgba(0,0,0,0.25)');
+    vg.addColorStop(0.12, 'rgba(0,0,0,0)');
+    vg.addColorStop(0.88, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.15)');
     cx.fillStyle = vg; cx.fillRect(0, dy, dw, dh);
     // Side vignettes
     const vl = cx.createLinearGradient(0, 0, 40, 0);
