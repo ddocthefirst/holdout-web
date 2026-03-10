@@ -326,6 +326,8 @@ const S = {
 let usedEvt = [], evtQ = [], T = 0;
 let pickerWho = null, pickerLoc = null;
 let scavX = -60, maraWalk = 0, eliWalk = 0;
+let scavBgOffset = 0;       // background scroll position (pixels, increases over time)
+let scavBgVariant = 0;      // which scav bg to show (0=scavBg1, 1=scavBg2)
 let nightFade = 0; // 0=day, 1=night (smooth transition)
 
 // Global sprite storage
@@ -334,9 +336,10 @@ let spritesReady = false;
 
 // ── Asset images ─────────────────────────────────────────────────────────
 const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null, action2: null, main: null,
-                  lv1: null, lv2: null, lv3: null, walkClean: null };
+                  lv1: null, lv2: null, lv3: null, walkClean: null,
+                  scavBg1: null, scavBg2: null };
 let assetsReady = 0;
-const ASSETS_TOTAL = 9; // add 4 new
+const ASSETS_TOTAL = 11; // +2 scav backgrounds
 
 // ── Walk clean sprite sheet (file_16, white bg, 4 rows × 8 frames, 1280×853) ──
 // PIXEL-SCANNED exact values:
@@ -556,6 +559,14 @@ function loadAssets(callback) {
   wci.onload = () => { ASSETS.walkClean = wci; onLoad(); };
   wci.onerror = onLoad;
   wci.src = 'assets/sprites-walk-clean.jpg';
+
+  // Dedicated scavenging outdoor backgrounds (1280×853, two variants)
+  ['scavBg1','scavBg2'].forEach((k,i) => {
+    const img = new Image();
+    img.onload = () => { ASSETS[k] = img; onLoad(); };
+    img.onerror = onLoad;
+    img.src = `assets/scav-bg${i+1}.jpg`;
+  });
 }
 
 // Draw an action sprite frame — extract to offscreen canvas, tint with glow color
@@ -651,101 +662,38 @@ function drawBg(t) {
   // The outdoor scavenging scene draws its own full sky — skip blue sky/moon/stars
   // (those are only relevant for a shelter-window night view which we no longer use)
 
-  // ── Outdoor scavenging — post-apocalyptic amber ruins (matches reference) ──
-  // Reference: TWoM-style side-scroller — amber/golden sky, ruined city silhouettes,
-  // rubble foreground, cracked ground. NOT dark night — daytime/dusk dramatic.
+  // ── Outdoor scavenging background: dedicated art, character fixed in center ──
+  // Per reference (file_24): character stays at fixed X, background scrolls behind.
+  // Backgrounds (file_25/26): cracked cobblestone, ruined city, fire barrel, wrecked car.
   {
-    const scavGY = Math.round(H * 0.72); // ground horizon line
+    const scavImg = (scavBgVariant === 0 ? ASSETS.scavBg1 : ASSETS.scavBg2) || ASSETS.scavBg1 || ASSETS.scavBg2;
+    if (scavImg) {
+      // Scale bg to fill canvas HEIGHT, maintain aspect → width ~1229px (extends off both sides)
+      const scaleS = H / scavImg.naturalHeight;
+      const bgW = Math.round(scavImg.naturalWidth * scaleS); // ~1229px
+      const bgH = H;
+      const maxPan = bgW - W; // ~809px of pan range
 
-    // Sky: amber/dusk gradient (dark top → rich amber mid → dusty tan low)
-    const sky = cx.createLinearGradient(0, 0, 0, scavGY);
-    sky.addColorStop(0,    '#0a0604');
-    sky.addColorStop(0.15, '#1c0e06');
-    sky.addColorStop(0.45, '#5a2c0a');
-    sky.addColorStop(0.75, '#8c4a12');
-    sky.addColorStop(1,    '#a06018');
-    cx.fillStyle = sky; cx.fillRect(0, 0, W, scavGY);
+      // Scroll background left continuously (character "runs" through the world)
+      scavBgOffset = (scavBgOffset + 0.8) % maxPan;
+      const bx = -Math.round(scavBgOffset);
 
-    // Ground: cracked earth / rubble tone
-    const grd = cx.createLinearGradient(0, scavGY, 0, H);
-    grd.addColorStop(0, '#3a2208');
-    grd.addColorStop(0.4, '#251608');
-    grd.addColorStop(1,   '#100a04');
-    cx.fillStyle = grd; cx.fillRect(0, scavGY, W, H - scavGY);
-
-    // Distant ruined city silhouettes (scroll very slowly)
-    SCROLL[0] = (SCROLL[0] + 0.06) % (W * 2);
-    const off0 = -Math.round(SCROLL[0]);
-    cx.save();
-    const farBlds = Array.from({length:22}, (_, i) => ({
-      x: i * 50 - 10, w: 18 + (i*11)%34, h: 60 + (i*17)%180
-    }));
-    farBlds.forEach(b => {
-      const bx = ((b.x + off0) % (W*2) + W*2) % (W*2) - W/2;
+      cx.save();
+      cx.drawImage(scavImg, 0, 0, scavImg.naturalWidth, scavImg.naturalHeight, bx, 0, bgW, bgH);
+      // When we reach the end, seamlessly blend in the other image
+      if (bx + bgW < W) {
+        const scavImg2 = (scavBgVariant === 0 ? ASSETS.scavBg2 : ASSETS.scavBg1) || scavImg;
+        cx.drawImage(scavImg2, 0, 0, scavImg2.naturalWidth, scavImg2.naturalHeight, bx + bgW, 0, bgW, bgH);
+      }
+      cx.restore();
+    } else {
+      // Fallback: amber sky + procedural silhouettes
+      const sky = cx.createLinearGradient(0, 0, 0, H * 0.72);
+      sky.addColorStop(0, '#0a0604'); sky.addColorStop(0.5, '#5a2c0a'); sky.addColorStop(1, '#a06018');
+      cx.fillStyle = sky; cx.fillRect(0, 0, W, Math.round(H * 0.72));
       cx.fillStyle = '#1a0c04';
-      cx.fillRect(bx, scavGY - b.h, b.w, b.h);
-    });
-    cx.restore();
-
-    // Mid-distance: damaged low structures, rubble (scroll medium)
-    SCROLL[1] = (SCROLL[1] + 0.15) % (W * 2.5);
-    const off1 = -Math.round(SCROLL[1]);
-    const midStructs = [
-      {x:0,  w:70,  h:90},  {x:90, w:120, h:50},  {x:230, w:45, h:110},
-      {x:290, w:90, h:40},  {x:390, w:55, h:75},  {x:460, w:100, h:55},
-      {x:560, w:65, h:95},  {x:630, w:110, h:45}, {x:750, w:50, h:80},
-      {x:810, w:130, h:60}, {x:940, w:70, h:100}, {x:1020,w:90, h:55},
-    ];
-    cx.save();
-    midStructs.forEach(b => {
-      const bx = ((b.x + off1) % (W*2.5) + W*2.5) % (W*2.5) - W/2;
-      cx.fillStyle = '#2a1606';
-      cx.fillRect(bx, scavGY - b.h, b.w, b.h);
-      // Broken top edge detail
-      cx.fillStyle = '#1e1004';
-      cx.fillRect(bx + 2, scavGY - b.h - 4, b.w * 0.3, 6);
-      cx.fillRect(bx + b.w * 0.6, scavGY - b.h - 3, b.w * 0.2, 4);
-    });
-    // Wrecked car (scrolls with mid layer)
-    const carX = ((110 + off1) % (W*2.5) + W*2.5) % (W*2.5) - W/2;
-    cx.fillStyle = '#2e1808';
-    cx.fillRect(carX, scavGY - 38, 90, 32);
-    cx.fillRect(carX + 10, scavGY - 52, 60, 18);
-    cx.fillStyle = '#1a0e04';
-    cx.beginPath(); cx.ellipse(carX+16, scavGY-6, 14, 10, 0, 0, Math.PI*2); cx.fill();
-    cx.beginPath(); cx.ellipse(carX+74, scavGY-6, 14, 10, 0, 0, Math.PI*2); cx.fill();
-    cx.restore();
-
-    // Near foreground: rubble chunks and debris (scroll fastest)
-    SCROLL[2] = (SCROLL[2] + 0.35) % (W * 3);
-    const off2 = -Math.round(SCROLL[2]);
-    const debris = Array.from({length:20}, (_, i) => ({
-      x: i * 52 + (i*13)%30, w: 12+(i*7)%28, h: 8+(i*11)%22
-    }));
-    cx.save();
-    debris.forEach(d => {
-      const dx = ((d.x + off2) % (W*3) + W*3) % (W*3) - 20;
-      cx.fillStyle = '#2a1608';
-      cx.fillRect(dx, scavGY - d.h + 10, d.w, d.h);
-    });
-    cx.restore();
-
-    // Cracked ground texture lines
-    cx.save();
-    cx.strokeStyle = 'rgba(0,0,0,0.28)'; cx.lineWidth = 1;
-    for (let i = 0; i < 8; i++) {
-      const gx = ((i * 60 + SCROLL[2]*0.4) % W);
-      cx.beginPath(); cx.moveTo(gx, scavGY + 5);
-      cx.lineTo(gx + 30 + i*8, scavGY + 40 + i*6); cx.stroke();
+      BLD_FAR.forEach(b => cx.fillRect(b.x, Math.round(H*0.72) - b.h, b.w, b.h));
     }
-    cx.restore();
-
-    // Atmospheric dust/haze
-    const haze = cx.createLinearGradient(0, scavGY - 80, 0, scavGY + 60);
-    haze.addColorStop(0, 'rgba(100,50,10,0)');
-    haze.addColorStop(0.5, 'rgba(80,40,8,0.12)');
-    haze.addColorStop(1, 'rgba(30,15,4,0)');
-    cx.fillStyle = haze; cx.fillRect(0, scavGY - 80, W, 140);
   }
 
   // Characters drawn on top of scavenging scene
@@ -769,9 +717,8 @@ function drawShelterInterior() {
 
     // Pan based on character positions — creates "moving through room" illusion
     // Target pan: character near left → show left side of room; near right → show right
-    const charMidX = S.mara.alive && S.eli.alive ? (scavX || W/2) :
-                     S.mara.alive ? (scavX || W*0.3) : (scavX || W*0.6);
-    const targetPan = -Math.round((charMidX / W) * (dw - W));
+    // Room pans gently over time (not tied to scavX since char is now fixed in scav)
+    const targetPan = -Math.round(((Math.sin(T * 0.04) * 0.5 + 0.5)) * (dw - W) * 0.6);
     const clampedPan = Math.max(-(dw - W), Math.min(0, targetPan));
     // Smooth pan
     roomPanX += (clampedPan - roomPanX) * 0.03;
@@ -854,21 +801,20 @@ function drawChars() {
       }
     };
 
+    // Character is FIXED in center of screen — background scrolls (per file_24 reference)
+    const charCenterX = Math.round(W * 0.42);
     if (scaver !== 'eli' && S.mara.alive) {
-      scavX += 0.5; if (scavX > W+60) scavX = -60;
       maraWalk += 0.14;
-      walkFn(scavX, '#c8a96e', maraWalk);
+      walkFn(charCenterX, '#c8a96e', maraWalk);
     }
     if (scaver === 'eli' && S.eli.alive) {
-      scavX += 0.4; if (scavX > W+60) scavX = -60;
       eliWalk += 0.12;
-      walkFn(scavX, '#4a9eff', eliWalk);
+      walkFn(charCenterX, '#4a9eff', eliWalk);
     }
     if (scaver === 'both') {
-      scavX += 0.45; if (scavX > W+60) scavX = -60;
       maraWalk += 0.13; eliWalk += 0.13;
-      if (S.mara.alive) walkFn(scavX - 24, '#c8a96e', maraWalk);
-      if (S.eli.alive)  walkFn(scavX + 12, '#4a9eff', eliWalk);
+      if (S.mara.alive) walkFn(charCenterX - 20, '#c8a96e', maraWalk);
+      if (S.eli.alive)  walkFn(charCenterX + 20, '#4a9eff', eliWalk);
     }
     const home = scaver === 'mara' ? 'eli' : scaver === 'eli' ? 'mara' : null;
     if (home && S[home].alive) {
