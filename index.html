@@ -333,38 +333,49 @@ const SPRITES = { mara: [], eli: [], action: [] };
 let spritesReady = false;
 
 // ── Asset images ─────────────────────────────────────────────────────────
-const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null };
+const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null, action2: null };
 let assetsReady = 0;
-const ASSETS_TOTAL = 3;
+const ASSETS_TOTAL = 4;
 
-// Parallax layer crop coords in parallax.jpg (1280×853)
-// Left half = labeled FAR→NEAR layers, right half = tileable backgrounds
-const PARALLAX_LAYERS = [
-  // right-side tileable strips (x=640, w=640) — scrolling backgrounds
-  { sx:640, sy:20,  sw:640, sh:148, speed:0.05, label:'sky-far'   },
-  { sx:640, sy:178, sw:640, sh:148, speed:0.12, label:'city-far'  },
-  { sx:640, sy:334, sw:640, sh:148, speed:0.25, label:'forest-mid'},
-  { sx:640, sy:656, sw:640, sh:160, speed:0.55, label:'ruin-near' },
-  // left-side labeled layers for extra depth
-  { sx:0,   sy:20,  sw:630, sh:142, speed:0.08, label:'far-lbl'   },
-  { sx:0,   sy:172, sw:630, sh:152, speed:0.18, label:'mar-lbl'   },
-  { sx:0,   sy:334, sw:630, sh:160, speed:0.32, label:'mid-lbl'   },
-  { sx:0,   sy:664, sw:630, sh:158, speed:0.60, label:'near-lbl'  },
+// ── sprites-action2.jpg (1280×853) layout:
+//   Top ~75% = 3 rows of action sprites on BLACK bg (use screen blend = instant transparency)
+//   Bottom ~25% = 4 panoramic backgrounds in 2×2 grid
+//
+// ACTION SPRITE ROWS (black bg — use globalCompositeOperation='screen')
+//   Row 0 (y=0,   h=210): hammering, carrying planks, aiming, reading map, crouching, resting
+//   Row 1 (y=215, h=210): seated crafting, aiming prone, cooking (green flame), scavenging, crouching, resting
+//   Row 2 (y=430, h=205): seated variants, reaching into container, inspecting item
+//   Each row: 6 frames, frame width = 1280/6 = ~213px
+const ACTION_ROWS = [
+  { y:0,   h:210, frames:6 },  // Row A: active actions (hammer, carry, aim)
+  { y:215, h:210, frames:6 },  // Row B: ground actions (prone aim, cook, scavenge)
+  { y:430, h:205, frames:6 },  // Row C: seated/crafting
 ];
-// Scroll offsets for each layer
-const SCROLL = PARALLAX_LAYERS.map(() => 0);
+const ACTION_FRAME_W = Math.round(1280 / 6); // ~213px
+
+// BACKGROUND PANORAMAS (bottom of sprites-action2.jpg, 2×2 grid)
+//   BG0 (x=0,   y=645, w=635, h=100): Moon + wide wasteland ruins — FAR
+//   BG1 (x=645, y=645, w=635, h=100): Industrial ruins + smoke — MID-FAR
+//   BG2 (x=0,   y=752, w=635, h=100): Fires + scattered ruins — MID-NEAR
+//   BG3 (x=645, y=752, w=635, h=100): Dead forest + ruins — NEAR
+const BG_STRIPS = [
+  { sx:0,   sy:645, sw:635, sh:100, speed:0.08 },  // FAR
+  { sx:645, sy:645, sw:635, sh:100, speed:0.18 },  // MID-FAR
+  { sx:0,   sy:752, sw:635, sh:100, speed:0.32 },  // MID-NEAR
+  { sx:645, sy:752, sw:635, sh:100, speed:0.55 },  // NEAR
+];
+const SCROLL = [0, 0, 0, 0];
 
 // Base interior crop coords in base-levels.jpg (1280×853)
-// 3 rows: Level 1 (top), Level 2 (mid), Level 3 (bottom)
-// Crop slightly tighter to avoid "LEVEL N" text watermark in the middle
 const BASE_LEVELS = [
-  { sy:10,  sh:240 },   // Level 1: top row, stop before the label
-  { sy:295, sh:240 },   // Level 2: mid row
-  { sy:578, sh:240 },   // Level 3: bottom row
+  { sy:10,  sh:240 },
+  { sy:295, sh:240 },
+  { sy:578, sh:240 },
 ];
 
 function loadAssets(callback) {
   function onLoad() { if (++assetsReady >= ASSETS_TOTAL) callback(); }
+
   const pimg = new Image();
   pimg.onload = () => { ASSETS.parallax = pimg; onLoad(); };
   pimg.onerror = onLoad;
@@ -379,6 +390,63 @@ function loadAssets(callback) {
   wimg.onload = () => { ASSETS.spritesWalk = wimg; onLoad(); };
   wimg.onerror = onLoad;
   wimg.src = 'assets/sprites-walk.jpg';
+
+  const aimg = new Image();
+  aimg.onload = () => { ASSETS.action2 = aimg; onLoad(); };
+  aimg.onerror = onLoad;
+  aimg.src = 'assets/sprites-action2.jpg';
+}
+
+// Draw an action sprite frame — extract to offscreen canvas, tint with glow color
+// rowIdx: 0=active, 1=ground, 2=seated | frameIdx: 0-5
+// x,y = center-bottom | scale = target height in px
+const _actionCache = new Map();
+function drawActionSprite(ctx, x, y, rowIdx, frameIdx, glow, scale) {
+  const row = ACTION_ROWS[rowIdx];
+  if (!ASSETS.action2 || !row) return;
+  const fi = Math.min(frameIdx, row.frames - 1);
+  const targetH = scale || 90;
+  const targetW = Math.round(ACTION_FRAME_W * targetH / row.h);
+  const cacheKey = `${rowIdx}_${fi}_${glow}_${targetH}`;
+
+  let tinted = _actionCache.get(cacheKey);
+  if (!tinted) {
+    // Extract frame to offscreen canvas, threshold dark bg, tint with glow color
+    const oc = document.createElement('canvas');
+    oc.width = targetW; oc.height = targetH;
+    const octx = oc.getContext('2d');
+    const sx = fi * ACTION_FRAME_W;
+
+    // Draw frame scaled
+    octx.drawImage(ASSETS.action2, sx, row.y, ACTION_FRAME_W, row.h, 0, 0, targetW, targetH);
+
+    // Extract pixels: nearly-black bg → transparent
+    const id = octx.getImageData(0, 0, targetW, targetH);
+    const px = id.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const lum = px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114;
+      if (lum < 28) {
+        px[i+3] = 0; // black bg → fully transparent
+      } else if (lum < 80) {
+        px[i+3] = Math.round(255 * (lum - 28) / 52); // fade edge
+      }
+      // else: keep character pixels at full alpha
+    }
+    octx.putImageData(id, 0, 0);
+
+    // Apply glow tint using source-in
+    octx.globalCompositeOperation = 'source-in';
+    octx.fillStyle = glow;
+    octx.fillRect(0, 0, targetW, targetH);
+
+    tinted = oc;
+    _actionCache.set(cacheKey, tinted);
+  }
+
+  ctx.save();
+  ctx.shadowColor = glow; ctx.shadowBlur = 18;
+  ctx.drawImage(tinted, x - targetW/2, y - targetH);
+  ctx.restore();
 }
 
 // ── Canvas setup ─────────────────────────────────────────────────────────
@@ -462,72 +530,66 @@ function drawBg(t) {
   }
 
   // ── Parallax background layers from actual art ──────────────────────────
-  if (ASSETS.parallax) {
-    const img = ASSETS.parallax;
+  if (ASSETS.action2) {
+    // ── 4-layer parallax from sprites-action2.jpg panoramic strips ───────
+    // BG_STRIPS: 4 backgrounds (FAR/MID-FAR/MID-NEAR/NEAR) at bottom of image
+    // Stacked depth: FAR covers full sky, each closer layer sits lower and scrolls faster
+    const img = ASSETS.action2;
     const isScavenging = S.phase === 'night' || nightFade > 0.2;
-    // Scroll speed multiplier — scroll when scavenging night scene
-    const scrollMult = isScavenging ? 1 : 0;
+    const scrollMult = isScavenging ? 1 : 0.15; // slow drift even at day
 
-    // Use right half of parallax.jpg — the "TILEABLE SIDE-SCROLL BACKGROUNDS" section
-    // Right half (x=640, w=640) contains 5 clean rows without label dividers
-    // We'll pick rows based on night vs day:
-    //   Row 0 (y=0..170): City skyline + crescent moon — perfect night sky
-    //   Row 1 (y=170..345): Forest/ruins with house glow — mid background
-    //   Row 2 (y=345..500): Open ruins/trees — near background
-    //   Row 4 (y=660..853): Dark ruins — near foreground
-    // Blend two rows for depth
-    const bgRightX = 640, bgRightW = 640;
-    const rowH = 170;
+    // Layer destinations: [yDest, hDest, alpha]
+    // Keep strip heights proportional (src ~635×100 → scale to ~200px tall max)
+    const layerPos = [
+      [0,       200, 0.70],  // FAR:      sky area
+      [GY*0.30, 190, 0.75],  // MID-FAR:  overlap for depth
+      [GY*0.50, 180, 0.80],  // MID-NEAR
+      [GY*0.60, 170, 0.85],  // NEAR: sits low
+    ];
 
-    // Far layer — city skyline + moon (row 0 of right half, skip top ~45px to avoid header text)
-    const farSrcY = 42, farSrcH = 140;
-    const farDestH = GY * 0.65;
-    const farDestW = Math.round(bgRightW * farDestH / farSrcH);
-    SCROLL[0] = (SCROLL[0] + 0.10 * scrollMult + 0.02) % farDestW;
-    cx.save();
-    cx.globalAlpha = 0.7;
-    for (let tx = -SCROLL[0]; tx < W + farDestW; tx += farDestW) {
-      cx.drawImage(img, bgRightX, farSrcY, bgRightW, farSrcH, Math.round(tx), 0, farDestW, farDestH);
-    }
-    // Fade bottom edge into next layer
-    const farFade = cx.createLinearGradient(0, farDestH - 60, 0, farDestH);
-    farFade.addColorStop(0, 'rgba(0,0,0,0)'); farFade.addColorStop(1, 'rgba(0,0,0,0.85)');
-    cx.fillStyle = farFade; cx.fillRect(0, 0, W, farDestH);
-    cx.restore();
+    BG_STRIPS.forEach((strip, i) => {
+      const [yDest, hDest, alpha] = layerPos[i];
+      const dw = Math.round(strip.sw * hDest / strip.sh);
+      SCROLL[i] = (SCROLL[i] + strip.speed * scrollMult) % dw;
 
-    // Near layer — dark ruins (bottom row of right half)
-    const nearSrcY = 660, nearSrcH = 185;
-    const nearDestH = GY * 0.52;
-    const nearDestW = Math.round(bgRightW * nearDestH / nearSrcH);
-    SCROLL[1] = (SCROLL[1] + 0.32 * scrollMult + 0.05) % nearDestW;
-    cx.save();
-    cx.globalAlpha = 0.78;
-    const nearY = GY - nearDestH + 10;
-    for (let tx = -SCROLL[1]; tx < W + nearDestW; tx += nearDestW) {
-      cx.drawImage(img, bgRightX, nearSrcY, bgRightW, nearSrcH, Math.round(tx), nearY, nearDestW, nearDestH);
-    }
-    // Fade top of near layer
-    const nearFade = cx.createLinearGradient(0, nearY, 0, nearY + 55);
-    nearFade.addColorStop(0, 'rgba(0,0,0,0.85)'); nearFade.addColorStop(1, 'rgba(0,0,0,0)');
-    cx.fillStyle = nearFade; cx.fillRect(0, nearY, W, 55);
-    cx.restore();
+      cx.save();
+      cx.globalAlpha = alpha;
+      // Clip strip to its destination rect
+      cx.beginPath(); cx.rect(0, yDest, W, hDest); cx.clip();
+      for (let tx = -SCROLL[i]; tx < W + dw; tx += dw) {
+        cx.drawImage(img, strip.sx, strip.sy, strip.sw, strip.sh,
+                     Math.round(tx), yDest, dw, hDest);
+      }
+      // Feather top and bottom edges
+      if (i > 0) {
+        const tg = cx.createLinearGradient(0, yDest, 0, yDest + 50);
+        tg.addColorStop(0, 'rgba(0,0,0,0.88)'); tg.addColorStop(1, 'rgba(0,0,0,0)');
+        cx.fillStyle = tg; cx.fillRect(0, yDest, W, 50);
+      }
+      const bg2 = cx.createLinearGradient(0, yDest + hDest - 40, 0, yDest + hDest);
+      bg2.addColorStop(0, 'rgba(0,0,0,0)'); bg2.addColorStop(1, 'rgba(0,0,0,0.7)');
+      cx.fillStyle = bg2; cx.fillRect(0, yDest + hDest - 40, W, 40);
+      cx.restore();
+    });
 
-    // Mask the seam between far/near layers with dark band
-    const seamY = GY * 0.63;
-    const seamG = cx.createLinearGradient(0, seamY - 30, 0, seamY + 30);
-    seamG.addColorStop(0, 'rgba(0,0,0,0)');
-    seamG.addColorStop(0.4, 'rgba(0,0,0,0.92)');
-    seamG.addColorStop(0.6, 'rgba(0,0,0,0.92)');
-    seamG.addColorStop(1, 'rgba(0,0,0,0)');
-    cx.fillStyle = seamG; cx.fillRect(0, seamY - 30, W, 60);
-
-    // Overall night blue-black tint
-    cx.fillStyle = `rgba(2,4,14,${0.28 + nf * 0.35})`;
+    // Night/day colour tint over all layers
+    cx.fillStyle = `rgba(2,4,14,${0.22 + nf * 0.38})`;
     cx.fillRect(0, 0, W, GY);
     if (nf < 0.5) {
-      cx.fillStyle = `rgba(20,12,5,${(1-nf)*0.2})`;
+      cx.fillStyle = `rgba(15,8,3,${(1-nf)*0.18})`;
       cx.fillRect(0, 0, W, GY);
     }
+  } else if (ASSETS.parallax) {
+    // Fallback: old parallax.jpg single strip
+    const img = ASSETS.parallax;
+    const bgSrcW = 640, bgSrcH = 853, bgDestH = GY;
+    const bgDestW = Math.round(bgSrcW * bgDestH / bgSrcH);
+    SCROLL[0] = (SCROLL[0] + 0.15) % bgDestW;
+    cx.save(); cx.globalAlpha = 0.65;
+    for (let tx = -SCROLL[0]; tx < W + bgDestW; tx += bgDestW)
+      cx.drawImage(img, 0, 0, bgSrcW, bgSrcH, Math.round(tx), 0, bgDestW, bgDestH);
+    cx.restore();
+    cx.fillStyle = `rgba(2,4,14,${0.3 + nf*0.35})`; cx.fillRect(0,0,W,GY);
   } else {
     // Fallback: procedural buildings
     BLD_FAR.forEach(b => {
@@ -647,10 +709,32 @@ function drawShelterExterior() {
 
 function drawChars() {
   const isNight = S.phase === 'night';
-  const scaver = pickerWho; // who is out
+  const scaver = pickerWho;
+
   if (!isNight) {
-    if (S.mara.alive) charSprite(cx, 95,  GY, maraWalk,      '#c8a96e', SPRITES.mara, 'mara');
-    if (S.eli.alive)  charSprite(cx, 200, GY, eliWalk*0.5,   '#4a9eff', SPRITES.eli,  'eli');
+    // ── DAY PHASE: show action sprites at shelter ──────────────────────
+    // Mara: hammering/building (row 0, frame 0) — animate between frame 0-1
+    // Eli: seated crafting (row 2) — animate between frame 0-2
+    const actionT = Math.floor(T * 2) % 6;
+
+    if (S.mara.alive) {
+      if (ASSETS.action2) {
+        // Alternate between hammer pose (fr0) and lift pose (fr1)
+        const mFr = Math.floor(T * 2.5) % 2;
+        drawActionSprite(cx, 110, GY, 0, mFr, '#c8a96e', 95);
+      } else {
+        charSprite(cx, 95, GY, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
+      }
+    }
+    if (S.eli.alive) {
+      if (ASSETS.action2) {
+        // Eli: seated crafting cycle (row 2, frames 0-2)
+        const eFr = Math.floor(T * 1.8) % 3;
+        drawActionSprite(cx, 250, GY, 2, eFr, '#4a9eff', 90);
+      } else {
+        charSprite(cx, 200, GY, eliWalk*0.5, '#4a9eff', SPRITES.eli, 'eli');
+      }
+    }
     maraWalk += 0.025; eliWalk += 0.025;
   } else {
     if (scaver !== 'eli' && S.mara.alive) {
@@ -670,7 +754,15 @@ function drawChars() {
       if (S.eli.alive)  charSprite(cx, scavX + 12, GY, eliWalk,  '#4a9eff', SPRITES.eli,  'eli');
     }
     const home = scaver === 'mara' ? 'eli' : scaver === 'eli' ? 'mara' : null;
-    if (home && S[home].alive) charSmall(cx, 58, GY - 50);
+    if (home && S[home].alive) {
+      const homeGlow = home === 'mara' ? '#c8a96e' : '#4a9eff';
+      if (ASSETS.action2) {
+        // Seated/waiting pose for the one who stayed home
+        drawActionSprite(cx, 55, GY, 2, 0, homeGlow, 72);
+      } else {
+        charSmall(cx, 58, GY - 50);
+      }
+    }
   }
 }
 
