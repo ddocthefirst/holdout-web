@@ -332,6 +332,54 @@ let nightFade = 0; // 0=day, 1=night (smooth transition)
 const SPRITES = { mara: [], eli: [], action: [] };
 let spritesReady = false;
 
+// ── Asset images ─────────────────────────────────────────────────────────
+const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null };
+let assetsReady = 0;
+const ASSETS_TOTAL = 3;
+
+// Parallax layer crop coords in parallax.jpg (1280×853)
+// Left half = labeled FAR→NEAR layers, right half = tileable backgrounds
+const PARALLAX_LAYERS = [
+  // right-side tileable strips (x=640, w=640) — scrolling backgrounds
+  { sx:640, sy:20,  sw:640, sh:148, speed:0.05, label:'sky-far'   },
+  { sx:640, sy:178, sw:640, sh:148, speed:0.12, label:'city-far'  },
+  { sx:640, sy:334, sw:640, sh:148, speed:0.25, label:'forest-mid'},
+  { sx:640, sy:656, sw:640, sh:160, speed:0.55, label:'ruin-near' },
+  // left-side labeled layers for extra depth
+  { sx:0,   sy:20,  sw:630, sh:142, speed:0.08, label:'far-lbl'   },
+  { sx:0,   sy:172, sw:630, sh:152, speed:0.18, label:'mar-lbl'   },
+  { sx:0,   sy:334, sw:630, sh:160, speed:0.32, label:'mid-lbl'   },
+  { sx:0,   sy:664, sw:630, sh:158, speed:0.60, label:'near-lbl'  },
+];
+// Scroll offsets for each layer
+const SCROLL = PARALLAX_LAYERS.map(() => 0);
+
+// Base interior crop coords in base-levels.jpg (1280×853)
+// 3 rows: Level 1 (top), Level 2 (mid), Level 3 (bottom)
+const BASE_LEVELS = [
+  { sy:10,  sh:270 },
+  { sy:290, sh:270 },
+  { sy:572, sh:270 },
+];
+
+function loadAssets(callback) {
+  function onLoad() { if (++assetsReady >= ASSETS_TOTAL) callback(); }
+  const pimg = new Image();
+  pimg.onload = () => { ASSETS.parallax = pimg; onLoad(); };
+  pimg.onerror = onLoad;
+  pimg.src = 'assets/parallax.jpg';
+
+  const bimg = new Image();
+  bimg.onload = () => { ASSETS.baseLevels = bimg; onLoad(); };
+  bimg.onerror = onLoad;
+  bimg.src = 'assets/base-levels.jpg';
+
+  const wimg = new Image();
+  wimg.onload = () => { ASSETS.spritesWalk = wimg; onLoad(); };
+  wimg.onerror = onLoad;
+  wimg.src = 'assets/sprites-walk.jpg';
+}
+
 // ── Canvas setup ─────────────────────────────────────────────────────────
 const cv = document.getElementById('bg');
 const cx = cv.getContext('2d');
@@ -412,39 +460,62 @@ function drawBg(t) {
     cx.globalAlpha = 1;
   }
 
-  // Far buildings
-  BLD_FAR.forEach(b => {
-    const by = GY - b.h;
-    cx.fillStyle = rgb(lerp3([7,9,14],[3,4,7],nf));
-    cx.fillRect(b.x, by, b.w, b.h);
-    b.wins.forEach((w,wi) => {
-      if (!w.lit) return;
-      const flk = Math.sin(T*2.5+wi*7) > 0.96 ? 0 : 1;
-      const al = nf > 0.5 ? 0.55 : 0.2;
-      cx.fillStyle = `rgba(255,215,100,${al*flk})`;
-      cx.fillRect(b.x + 3 + w.ox*(b.w-8), by + 6 + w.oy*(b.h-18), 5, 7);
-    });
-  });
+  // ── Parallax background layers from actual art ──────────────────────────
+  if (ASSETS.parallax) {
+    const img = ASSETS.parallax;
+    const isScavenging = S.phase === 'night' || nightFade > 0.2;
+    // Scroll speed multiplier — scroll when scavenging night scene
+    const scrollMult = isScavenging ? 1 : 0;
 
-  // Mid buildings
-  BLD_MID.forEach(b => {
-    const by = GY - b.h;
-    cx.fillStyle = rgb(lerp3([5,7,11],[2,3,5],nf));
-    cx.fillRect(b.x, by, b.w, b.h);
-    b.wins.forEach((w,wi) => {
-      if (!w.lit) return;
-      const al = nf > 0.5 ? 0.6 : 0.22;
-      const flk = Math.sin(T*3+wi*11) > 0.95 ? 0 : 1;
-      cx.fillStyle = `rgba(255,200,80,${al*flk})`;
-      cx.fillRect(b.x + 4 + w.ox*(b.w-10), by + 5 + w.oy*(b.h-16), 6, 8);
-    });
-  });
+    // Draw 4 depth layers (right-side tileable strips)
+    const layerDefs = [
+      { idx:0, yDest:0,        hDest:GY*0.4 },   // sky-far
+      { idx:1, yDest:GY*0.15,  hDest:GY*0.5 },   // city-far
+      { idx:2, yDest:GY*0.32,  hDest:GY*0.55 },  // forest-mid
+      { idx:3, yDest:GY*0.52,  hDest:GY*0.52 },  // ruin-near
+    ];
 
-  // Shelter + scene
+    cx.save();
+    cx.globalAlpha = nf > 0.1 ? Math.min(1, nf * 2) : 0; // fade in with night
+    layerDefs.forEach(({ idx, yDest, hDest }) => {
+      const lyr = PARALLAX_LAYERS[idx];
+      SCROLL[idx] = (SCROLL[idx] + lyr.speed * scrollMult * 0.5) % lyr.sw;
+      const sx = SCROLL[idx];
+      // Tile the strip across the destination width (420px) from a 640px source strip
+      const dw = W;
+      const scaledSW = lyr.sw * (hDest / lyr.sh); // proportional width at this height
+      // Draw 2 tiles to seamlessly cover width
+      const sx1 = (sx / lyr.sw) * scaledSW;
+      for (let tx = -sx1; tx < dw + scaledSW; tx += scaledSW) {
+        cx.drawImage(img, lyr.sx, lyr.sy, lyr.sw, lyr.sh,
+                     Math.round(tx), Math.round(yDest), Math.round(scaledSW), Math.round(hDest));
+      }
+    });
+    cx.restore();
+
+    // Night overlay to darken/tint asset art
+    if (nf > 0) {
+      cx.fillStyle = `rgba(2,5,14,${nf * 0.55})`;
+      cx.fillRect(0, 0, W, GY);
+    }
+  } else {
+    // Fallback: procedural buildings
+    BLD_FAR.forEach(b => {
+      const by = GY - b.h;
+      cx.fillStyle = rgb(lerp3([7,9,14],[3,4,7],nf));
+      cx.fillRect(b.x, by, b.w, b.h);
+    });
+    BLD_MID.forEach(b => {
+      cx.fillStyle = rgb(lerp3([5,7,11],[2,3,5],nf));
+      cx.fillRect(b.x, GY - b.h, b.w, b.h);
+    });
+  }
+
+  // ── Shelter/scene (day = base interior from level art) ──────────────────
   if (S.phase === 'day' && nightFade < 0.5) drawShelterInterior();
   else drawShelterExterior();
 
-  // Foreground silhouettes
+  // Foreground silhouettes (keep for depth)
   BLD_FG.forEach(b => {
     cx.fillStyle = rgb(lerp3([3,3,5],[1,2,4],nf));
     cx.fillRect(b.x, GY - b.h, b.w, b.h);
@@ -479,30 +550,51 @@ function drawBg(t) {
 }
 
 function drawShelterInterior() {
-  cx.fillStyle = '#08090e';
-  cx.fillRect(22, GY-155, W-44, 155);
-  // Wood plank lines
-  cx.strokeStyle = '#0c0e14'; cx.lineWidth = 2;
-  for (let i = 1; i < 6; i++) { cx.beginPath(); cx.moveTo(22, GY-155+i*26); cx.lineTo(W-22, GY-155+i*26); cx.stroke(); }
-  // Vertical walls
-  cx.fillStyle = '#060710'; cx.fillRect(22, GY-155, 5, 155); cx.fillRect(W-27, GY-155, 5, 155);
-  // Window
-  const wflk = Math.sin(T*6)*0.15+0.85;
-  cx.fillStyle = `rgba(5,12,28,0.95)`;
-  cx.fillRect(W-82, GY-128, 40, 46);
-  cx.strokeStyle = '#151c2e'; cx.lineWidth = 1.5;
-  cx.strokeRect(W-82, GY-128, 40, 46);
-  cx.strokeStyle = '#0d1322';
-  cx.beginPath(); cx.moveTo(W-62, GY-128); cx.lineTo(W-62, GY-82); cx.stroke();
-  cx.beginPath(); cx.moveTo(W-82, GY-105); cx.lineTo(W-42, GY-105); cx.stroke();
-  // Candle
-  const cy2 = GY - 28, cg = cx.createRadialGradient(150, cy2, 0, 150, cy2, 50);
-  cg.addColorStop(0, `rgba(255,170,50,${0.38*wflk})`);
-  cg.addColorStop(1, 'transparent');
-  cx.fillStyle = cg; cx.fillRect(100, cy2-50, 100, 50);
-  cx.fillStyle = '#b8924e'; cx.fillRect(148, cy2-12, 4, 14);
-  cx.fillStyle = `rgba(255,200,60,${wflk})`;
-  cx.beginPath(); cx.ellipse(150, cy2-14, 3, 5+Math.sin(T*8)*0.8, 0, 0, Math.PI*2); cx.fill();
+  const lvl = Math.min(2, Math.max(0, (S.shelter || 1) - 1)); // 0=lv1, 1=lv2, 2=lv3
+
+  if (ASSETS.baseLevels) {
+    const img = ASSETS.baseLevels;
+    const crop = BASE_LEVELS[lvl];
+    const dh = 160, dy = GY - dh;
+    const dw = W;
+    // Draw the actual base level art
+    cx.save();
+    cx.drawImage(img, 0, crop.sy, 1280, crop.sh, 0, dy, dw, dh);
+    // Subtle vignette overlay to blend edges
+    const vg = cx.createLinearGradient(0, dy, 0, GY);
+    vg.addColorStop(0, 'rgba(0,0,0,0.55)');
+    vg.addColorStop(0.15, 'rgba(0,0,0,0)');
+    vg.addColorStop(0.85, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.35)');
+    cx.fillStyle = vg; cx.fillRect(0, dy, dw, dh);
+    // Side vignettes
+    const vl = cx.createLinearGradient(0, 0, 40, 0);
+    vl.addColorStop(0,'rgba(0,0,0,0.6)'); vl.addColorStop(1,'rgba(0,0,0,0)');
+    cx.fillStyle = vl; cx.fillRect(0, dy, 40, dh);
+    const vr = cx.createLinearGradient(W-40, 0, W, 0);
+    vr.addColorStop(0,'rgba(0,0,0,0)'); vr.addColorStop(1,'rgba(0,0,0,0.6)');
+    cx.fillStyle = vr; cx.fillRect(W-40, dy, 40, dh);
+    cx.restore();
+
+    // Animated candle flicker glow over the art
+    const cflk = Math.sin(T*6.5)*0.12+0.88;
+    const cg = cx.createRadialGradient(W/2, GY-20, 0, W/2, GY-20, 80);
+    cg.addColorStop(0, `rgba(255,160,40,${0.18*cflk})`);
+    cg.addColorStop(1, 'transparent');
+    cx.fillStyle = cg; cx.fillRect(W/2-80, GY-100, 160, 100);
+  } else {
+    // Fallback: procedural shelter
+    cx.fillStyle = '#08090e';
+    cx.fillRect(22, GY-155, W-44, 155);
+    cx.strokeStyle = '#0c0e14'; cx.lineWidth = 2;
+    for (let i = 1; i < 6; i++) { cx.beginPath(); cx.moveTo(22, GY-155+i*26); cx.lineTo(W-22, GY-155+i*26); cx.stroke(); }
+    const wflk = Math.sin(T*6)*0.15+0.85;
+    const cy2 = GY - 28, cg = cx.createRadialGradient(150, cy2, 0, 150, cy2, 50);
+    cg.addColorStop(0, `rgba(255,170,50,${0.38*wflk})`); cg.addColorStop(1, 'transparent');
+    cx.fillStyle = cg; cx.fillRect(100, cy2-50, 100, 50);
+    cx.fillStyle = `rgba(255,200,60,${wflk})`;
+    cx.beginPath(); cx.ellipse(150, cy2-14, 3, 5+Math.sin(T*8)*0.8, 0, 0, Math.PI*2); cx.fill();
+  }
 }
 
 function drawShelterExterior() {
@@ -761,7 +853,7 @@ function loadSprites(callback) {
     callback();
   };
   img.onerror = () => { spritesReady = false; callback(); }; // fallback to procedural
-  img.src = 'sprites/sheet2.jpg';
+  img.src = 'assets/sprites-walk.jpg';
 }
 
 function extractSprites(img) {
@@ -1192,8 +1284,11 @@ function reset() {
 
 // ── Loop ────────────────────────────────────────────────────────────────────
 (function loop(t) { drawBg(t); requestAnimationFrame(loop); })(0);
-loadSprites(() => {
-  updateUI();
+// Load all assets (parallax layers, base interiors, sprite walk sheet) then init UI
+loadAssets(() => {
+  loadSprites(() => {
+    updateUI();
+  });
 });
 </script>
 </body>
