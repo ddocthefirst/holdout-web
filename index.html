@@ -523,56 +523,188 @@ function drawChars() {
   const isNight = S.phase === 'night';
   const scaver = pickerWho; // who is out
   if (!isNight) {
-    if (S.mara.alive) char(cx, 100, GY, maraWalk, '#c8a96e', 46);
-    if (S.eli.alive)  char(cx, 200, GY, eliWalk*0.5, '#4a9eff', 52);
+    if (S.mara.alive) char(cx, 95,  GY, maraWalk,      '#c8a96e', 'mara');
+    if (S.eli.alive)  char(cx, 200, GY, eliWalk*0.5,   '#4a9eff', 'eli');
     maraWalk += 0.025; eliWalk += 0.025;
   } else {
-    // Scavenging character walks across
     if (scaver !== 'eli' && S.mara.alive) {
       scavX += 0.5; if (scavX > W+60) scavX = -60;
       maraWalk += 0.14;
-      char(cx, scavX, GY, maraWalk, '#c8a96e', 46);
+      char(cx, scavX, GY, maraWalk, '#c8a96e', 'mara');
     }
     if (scaver === 'eli' && S.eli.alive) {
       scavX += 0.4; if (scavX > W+60) scavX = -60;
       eliWalk += 0.12;
-      char(cx, scavX, GY, eliWalk, '#4a9eff', 52);
+      char(cx, scavX, GY, eliWalk, '#4a9eff', 'eli');
     }
     if (scaver === 'both') {
       scavX += 0.45; if (scavX > W+60) scavX = -60;
       maraWalk += 0.13; eliWalk += 0.13;
-      if (S.mara.alive) char(cx, scavX - 22, GY, maraWalk, '#c8a96e', 46);
-      if (S.eli.alive)  char(cx, scavX + 10, GY, eliWalk,  '#4a9eff', 52);
+      if (S.mara.alive) char(cx, scavX - 24, GY, maraWalk, '#c8a96e', 'mara');
+      if (S.eli.alive)  char(cx, scavX + 12, GY, eliWalk,  '#4a9eff', 'eli');
     }
-    // Remaining character in shelter window
     const home = scaver === 'mara' ? 'eli' : scaver === 'eli' ? 'mara' : null;
-    if (home && S[home].alive) charSmall(cx, 58, GY - 47);
+    if (home && S[home].alive) charSmall(cx, 58, GY - 50);
   }
 }
 
-function char(ctx, x, y, w, glow, h) {
-  const bob = Math.sin(w*2)*1.8;
-  const leg = Math.sin(w*2)*9;
-  ctx.save(); ctx.translate(x, y + bob);
-  ctx.fillStyle = '#000'; ctx.shadowColor = glow; ctx.shadowBlur = 10;
-  // torso
-  ctx.fillRect(-5, -h, 10, h*0.44);
-  // head
-  ctx.beginPath(); ctx.arc(0, -h-8, 7, 0, Math.PI*2); ctx.fill();
-  // legs
-  ctx.fillRect(-7+leg*0.6, -h*0.56, 5, h*0.42);
-  ctx.fillRect(2-leg*0.6, -h*0.56, 5, h*0.42);
-  // arms
-  ctx.fillRect(-11, -h+2, 4, h*0.28);
-  ctx.fillRect(7,   -h+2, 4, h*0.28);
-  ctx.shadowBlur = 0; ctx.restore();
+// Chunky silhouette character — round head, dot eyes, backpack, boots
+// style: 'mara' (longer hair) or 'eli' (shorter, stockier)
+function char(ctx, x, y, walk, glow, style) {
+  const t = walk;
+  const bob   = Math.sin(t*2) * 1.8;
+  const legL  = Math.sin(t*2) * 13;   // leg swing angle deg
+  const legR  = -Math.sin(t*2) * 13;
+  const armL  = -Math.sin(t*2) * 10;
+  const armR  = Math.sin(t*2) * 10;
+  const lean  = Math.sin(t*2) * 1.2;  // slight body lean
+
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ctx.shadowColor = glow;
+
+  // ── Backpack (behind body) ──
+  ctx.shadowBlur = 4;
+  ctx.fillStyle = '#000';
+  ctx.save();
+  ctx.translate(-10, -46);
+  ctx.beginPath();
+  ctx.roundRect(-7, -8, 13, 22, 3);
+  ctx.fill();
+  // pack strap line
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(-2,-8); ctx.lineTo(-2,14); ctx.stroke();
+  ctx.restore();
+
+  // ── Legs ──
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = '#000';
+  // Left leg
+  ctx.save();
+  ctx.translate(-5, -16);
+  ctx.rotate(legL * Math.PI/180);
+  // thigh
+  ctx.fillRect(-5, 0, 9, 16);
+  ctx.save();
+  ctx.translate(0, 16);
+  ctx.rotate(-legL * 0.5 * Math.PI/180);
+  // shin
+  ctx.fillRect(-4, 0, 8, 14);
+  // boot
+  ctx.save(); ctx.translate(0, 14);
+  ctx.beginPath();
+  ctx.roundRect(-5, 0, 12, 6, 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+  ctx.restore();
+
+  // Right leg
+  ctx.save();
+  ctx.translate(5, -16);
+  ctx.rotate(legR * Math.PI/180);
+  ctx.fillRect(-4, 0, 9, 16);
+  ctx.save();
+  ctx.translate(0, 16);
+  ctx.rotate(-legR * 0.5 * Math.PI/180);
+  ctx.fillRect(-4, 0, 8, 14);
+  ctx.save(); ctx.translate(0, 14);
+  ctx.beginPath(); ctx.roundRect(-5, 0, 12, 6, 2); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+  ctx.restore();
+
+  // ── Body / torso ──
+  ctx.shadowBlur = 8;
+  ctx.save();
+  ctx.rotate(lean * Math.PI/180);
+  ctx.beginPath();
+  ctx.roundRect(-9, -46, 18, 32, 4);
+  ctx.fill();
+  ctx.restore();
+
+  // ── Arms ──
+  ctx.shadowBlur = 4;
+  // Left arm
+  ctx.save();
+  ctx.translate(-10, -44);
+  ctx.rotate((armL - 8) * Math.PI/180);
+  ctx.beginPath(); ctx.roundRect(-3, 0, 6, 18, 3); ctx.fill();
+  ctx.restore();
+  // Right arm
+  ctx.save();
+  ctx.translate(10, -44);
+  ctx.rotate((armR + 8) * Math.PI/180);
+  ctx.beginPath(); ctx.roundRect(-3, 0, 6, 18, 3); ctx.fill();
+  ctx.restore();
+
+  // ── Head ──
+  ctx.shadowBlur = 14;
+  ctx.save();
+  ctx.translate(0, -62);
+  // Main head — round blobby
+  ctx.beginPath();
+  ctx.arc(0, 0, 16, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Hair
+  if (style === 'mara') {
+    // Longer hair — sweeps back
+    ctx.beginPath();
+    ctx.moveTo(-14, -4);
+    ctx.quadraticCurveTo(-20, 4, -18, 16);
+    ctx.quadraticCurveTo(-16, 22, -10, 20);
+    ctx.quadraticCurveTo(-6, 18, -4, 12);
+    ctx.lineTo(-16, 8);
+    ctx.fill();
+    // Hair top tuft
+    ctx.beginPath();
+    ctx.moveTo(-10, -14);
+    ctx.quadraticCurveTo(-16, -22, -6, -20);
+    ctx.fill();
+  } else {
+    // Eli — shorter crop, slightly wider head
+    ctx.beginPath();
+    ctx.arc(0, 0, 17, Math.PI*0.9, Math.PI*2.1); // wider
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-14, -8);
+    ctx.quadraticCurveTo(-12, -22, 2, -20);
+    ctx.quadraticCurveTo(10, -18, 8, -10);
+    ctx.fill();
+  }
+
+  // White dot eyes
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.shadowColor = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 4;
+  ctx.beginPath(); ctx.arc(-5, 2, 3.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, 2, 3.5, 0, Math.PI*2); ctx.fill();
+
+  // Eye shine
+  ctx.fillStyle = '#000';
+  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(-4.2, 1.2, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5.8, 1.2, 1.5, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore(); // head
+  ctx.restore(); // main
 }
+
 function charSmall(ctx, x, y) {
-  const b = Math.sin(T*1.8)*1;
+  const b = Math.sin(T*1.5)*0.8;
   ctx.save(); ctx.translate(x, y+b);
-  ctx.fillStyle = '#000'; ctx.shadowColor = '#4a9eff'; ctx.shadowBlur = 5;
-  ctx.beginPath(); ctx.arc(0,-16,5,0,Math.PI*2); ctx.fill();
-  ctx.fillRect(-4,-11,8,12); ctx.shadowBlur=0; ctx.restore();
+  ctx.fillStyle = '#000'; ctx.shadowColor = '#4a9eff'; ctx.shadowBlur = 6;
+  // body
+  ctx.beginPath(); ctx.roundRect(-5,-22,10,14,3); ctx.fill();
+  // head
+  ctx.beginPath(); ctx.arc(0,-28,7,0,Math.PI*2); ctx.fill();
+  // eyes
+  ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.shadowBlur=2;
+  ctx.beginPath(); ctx.arc(-2,-27,1.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(2,-27,1.5,0,Math.PI*2); ctx.fill();
+  ctx.shadowBlur=0; ctx.restore();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -845,8 +977,7 @@ function drawModalScene(id) {
       g.addColorStop(0,'rgba(200,140,50,0.38)');g.addColorStop(1,'transparent');
       ctx2.fillStyle=g; ctx2.fillRect(0,0,w,h);
       ctx2.strokeStyle='#0f1520'; ctx2.lineWidth=3; ctx2.strokeRect(w*.42,h*.18,w*.16,h*.62);
-      // Woman
-      fig(ctx2,w*.28,gy,'#c8a96e',38); fig(ctx2,w*.19,gy,'#4a9eff',24);
+      fig(ctx2,w*.28,gy,'#c8a96e',0.55,'female'); fig(ctx2,w*.19,gy,'#4a9eff',0.38,'male');
     },
     food_find: ()=>{
       // Shelves, tins
@@ -856,11 +987,11 @@ function drawModalScene(id) {
     cache: ()=>{
       ctx2.fillStyle='#020408'; ctx2.fillRect(w*.08,h*.15,w*.84,h*.65);
       for(let i=1;i<4;i++){ctx2.strokeStyle='#080f1e';ctx2.lineWidth=2;ctx2.beginPath();ctx2.moveTo(w*.08,h*(0.15+i*.18));ctx2.lineTo(w*.92,h*(0.15+i*.18));ctx2.stroke();}
-      [w*.58,w*.7,w*.8].forEach((fx,fi)=>fig(ctx2,fx,gy,'#4a9eff',fi===1?22:28));
-      fig(ctx2,w*.2,gy,'#c8a96e',38);
+      [w*.58,w*.7,w*.8].forEach((fx,fi)=>fig(ctx2,fx,gy,'#4a9eff',fi===1?0.32:0.42));
+      fig(ctx2,w*.2,gy,'#c8a96e',0.55,'female');
     },
     raiders: ()=>{
-      [w*.55,w*.68,w*.8].forEach(rx=>{ fig(ctx2,rx,gy,'#e94560',38); ctx2.fillStyle='#000';ctx2.shadowColor='#e94560';ctx2.shadowBlur=3;ctx2.fillRect(rx-16,gy-30,14,3);ctx2.shadowBlur=0; });
+      [w*.55,w*.68,w*.8].forEach(rx=>{ fig(ctx2,rx,gy,'#e94560',0.45); ctx2.fillStyle='#000';ctx2.shadowColor='#e94560';ctx2.shadowBlur=3;ctx2.fillRect(rx-10,gy-20,12,3);ctx2.shadowBlur=0; });
       ctx2.fillStyle='#020308'; ctx2.fillRect(w*.04,gy-75,82,75);
       ctx2.strokeStyle='rgba(200,169,110,0.25)';ctx2.lineWidth=1;ctx2.strokeRect(w*.04,gy-75,82,75);
     },
@@ -876,20 +1007,40 @@ function drawModalScene(id) {
       ctx2.fillRect(w*.15,gy-12,w*.45,10);
       ctx2.beginPath();ctx2.arc(w*.6,gy-16,9,0,Math.PI*2);ctx2.fill();
       ctx2.shadowBlur=0;
-      fig(ctx2,w*.75,gy,'#c8a96e',42);
+      fig(ctx2,w*.75,gy,'#c8a96e',0.55,'female');
     },
   };
   (scenes[id] || scenes.food_find)();
 }
-function fig(ctx2, x, gy, glow, h) {
-  const bob = Math.sin(T*1.5)*0.8;
-  ctx2.save(); ctx2.translate(x,gy+bob);
-  ctx2.fillStyle='#000'; ctx2.shadowColor=glow; ctx2.shadowBlur=5;
-  ctx2.beginPath(); ctx2.arc(0,-h-6,h<28?4:6,0,Math.PI*2); ctx2.fill();
-  ctx2.fillRect(-(h<28?3:5),-h,h<28?6:10,h*0.42);
-  ctx2.fillRect(-(h<28?2:4),-h*0.58,h<28?4:5,h*0.42);
-  ctx2.fillRect((h<28?1:1),-h*0.58,h<28?4:5,h*0.42);
-  ctx2.shadowBlur=0; ctx2.restore();
+function fig(ctx2, x, gy, glow, scale, style) {
+  const sc = scale || 0.55;
+  const bob = Math.sin(T*1.5)*0.6;
+  ctx2.save();
+  ctx2.translate(x, gy + bob);
+  ctx2.scale(sc, sc);
+  ctx2.fillStyle = '#000';
+  ctx2.shadowColor = glow; ctx2.shadowBlur = 6;
+  // body
+  ctx2.beginPath(); ctx2.roundRect(-9,-46,18,32,4); ctx2.fill();
+  // legs (static in modal)
+  ctx2.fillRect(-9,-16,8,20); ctx2.fillRect(1,-16,8,20);
+  ctx2.beginPath(); ctx2.roundRect(-10,4,12,5,2); ctx2.fill();
+  ctx2.beginPath(); ctx2.roundRect(0,4,12,5,2); ctx2.fill();
+  // head
+  ctx2.shadowBlur = 10;
+  ctx2.beginPath(); ctx2.arc(0,-62,16,0,Math.PI*2); ctx2.fill();
+  // hair
+  if (style === 'female' || !style) {
+    ctx2.beginPath(); ctx2.moveTo(-14,-4); ctx2.quadraticCurveTo(-20,6,-14,18); ctx2.quadraticCurveTo(-8,22,-4,12); ctx2.lineTo(-16,6); ctx2.fill();
+  }
+  // eyes
+  ctx2.fillStyle='rgba(255,255,255,0.9)'; ctx2.shadowColor='#fff'; ctx2.shadowBlur=3;
+  ctx2.beginPath(); ctx2.arc(-5,-60,3,0,Math.PI*2); ctx2.fill();
+  ctx2.beginPath(); ctx2.arc(5,-60,3,0,Math.PI*2); ctx2.fill();
+  ctx2.fillStyle='#000'; ctx2.shadowBlur=0;
+  ctx2.beginPath(); ctx2.arc(-4,-60,1.2,0,Math.PI*2); ctx2.fill();
+  ctx2.beginPath(); ctx2.arc(6,-60,1.2,0,Math.PI*2); ctx2.fill();
+  ctx2.restore();
 }
 
 // ── Game over ──────────────────────────────────────────────────────────────
