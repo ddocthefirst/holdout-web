@@ -333,9 +333,58 @@ const SPRITES = { mara: [], eli: [], action: [] };
 let spritesReady = false;
 
 // ── Asset images ─────────────────────────────────────────────────────────
-const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null, action2: null, main: null };
+const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null, action2: null, main: null,
+                  lv1: null, lv2: null, lv3: null, walkClean: null };
 let assetsReady = 0;
-const ASSETS_TOTAL = 5;
+const ASSETS_TOTAL = 9; // add 4 new
+
+// ── Walk clean sprite sheet (file_16, white bg, 4 rows × 8 frames, 1280×853) ──
+// White background: threshold lum > 220 → transparent, keep dark character pixels
+// Row 0 (y≈0,   h≈213): walk standard
+// Row 1 (y≈213, h≈213): walk with pack (heavier step)
+// Row 2 (y≈426, h≈213): crouch walk
+// Row 3 (y≈639, h≈213): run
+const CLEAN_ROWS = [
+  { y:4,   h:206, frames:8 },
+  { y:214, h:210, frames:8 },
+  { y:428, h:207, frames:8 },
+  { y:639, h:210, frames:8 },
+];
+const CLEAN_FW = Math.round(1280 / 8); // 160px per frame
+const _cleanCache = new Map();
+
+function drawCleanSprite(ctx, x, y, rowIdx, frameIdx, scale) {
+  const row = CLEAN_ROWS[rowIdx];
+  if (!ASSETS.walkClean || !row) return;
+  const fi = Math.abs(frameIdx) % row.frames;
+  const targetH = scale || 100;
+  const targetW = Math.round(CLEAN_FW * targetH / row.h);
+  const key = `${rowIdx}_${fi}_${targetH}`;
+  let cached = _cleanCache.get(key);
+  if (!cached) {
+    const oc = document.createElement('canvas');
+    oc.width = targetW; oc.height = targetH;
+    const octx = oc.getContext('2d');
+    octx.drawImage(ASSETS.walkClean, fi * CLEAN_FW, row.y, CLEAN_FW, row.h, 0, 0, targetW, targetH);
+    // Remove white background: lum > 220 → transparent
+    const id = octx.getImageData(0, 0, targetW, targetH);
+    const px = id.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const lum = px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114;
+      if (lum > 220) { px[i+3] = 0; }
+      else if (lum > 180) { px[i+3] = Math.round(px[i+3] * (220-lum)/40); }
+    }
+    octx.putImageData(id, 0, 0);
+    cached = oc;
+    _cleanCache.set(key, cached);
+  }
+  ctx.save();
+  ctx.drawImage(cached, x - targetW/2, y - targetH);
+  ctx.restore();
+}
+
+// ── Room pan state — updated each frame so room shifts with character movement ──
+let roomPanX = 0; // current pan offset in pixels
 
 // ── sprites-main.jpg (1280×853) — new smooth animations on blue chroma-key bg ──
 // Layout (pixel-scanned dividers at y=3,224,261,429,455,632,818,835):
@@ -465,6 +514,19 @@ function loadAssets(callback) {
   mimg.onload = () => { ASSETS.main = mimg; onLoad(); };
   mimg.onerror = onLoad;
   mimg.src = 'assets/sprites-main.jpg';
+
+  // New dedicated level room images (1280×853 each — no distortion, pan to fill)
+  ['lv1','lv2','lv3'].forEach(k => {
+    const i = new Image();
+    i.onload = () => { ASSETS[k] = i; onLoad(); };
+    i.onerror = onLoad;
+    i.src = `assets/base-${k}.jpg`;
+  });
+  // New clean sprite sheet (white bg)
+  const wci = new Image();
+  wci.onload = () => { ASSETS.walkClean = wci; onLoad(); };
+  wci.onerror = onLoad;
+  wci.src = 'assets/sprites-walk-clean.jpg';
 }
 
 // Draw an action sprite frame — extract to offscreen canvas, tint with glow color
@@ -549,6 +611,13 @@ const GY = Math.round(H * 0.71); // ground Y
 function drawBg(t) {
   const dt = t - (drawBg._lt || t); drawBg._lt = t; T += dt * 0.001;
   const nf = nightFade; // 0=day, 1=night
+
+  // ── DAY PHASE: room interior fills entire canvas, then draw chars ────────
+  if (S.phase === 'day' && nightFade < 0.05) {
+    drawShelterInterior();
+    drawChars();
+    return; // skip all outdoor rendering
+  }
 
   // Sky
   const sk = cx.createLinearGradient(0, 0, 0, GY);
@@ -676,9 +745,8 @@ function drawBg(t) {
     });
   }
 
-  // ── Shelter/scene (day = base interior from level art) ──────────────────
-  if (S.phase === 'day' && nightFade < 0.5) drawShelterInterior();
-  else drawShelterExterior();
+  // Night: shelter exterior (small window view of outside)
+  drawShelterExterior();
 
   // Foreground silhouettes (keep for depth)
   BLD_FG.forEach(b => {
@@ -715,50 +783,34 @@ function drawBg(t) {
 }
 
 function drawShelterInterior() {
-  const lvl = Math.min(2, Math.max(0, (S.shelter || 1) - 1)); // 0=lv1, 1=lv2, 2=lv3
+  const lvl = Math.min(2, Math.max(0, (S.shelter || 1) - 1));
+  const img = [ASSETS.lv1, ASSETS.lv2, ASSETS.lv3][lvl];
 
-  if (ASSETS.baseLevels) {
-    const img = ASSETS.baseLevels;
-    const crop = BASE_LEVELS[lvl];
-    const dh = 200, dy = GY - dh;
-    const dw = W;
-    // Draw the actual base level art
+  if (img) {
+    // Scale to cover full canvas height, maintain native aspect ratio
+    // Image is 1280×853 → scale to canvas H=820 → displayW=1229px (extends 809px off right)
+    const scale = H / img.naturalHeight;
+    const dw = Math.round(img.naturalWidth * scale);  // ~1229px
+    const dh = H;                                     // full canvas height
+
+    // Pan based on character positions — creates "moving through room" illusion
+    // Target pan: character near left → show left side of room; near right → show right
+    const charMidX = S.mara.alive && S.eli.alive ? (scavX || W/2) :
+                     S.mara.alive ? (scavX || W*0.3) : (scavX || W*0.6);
+    const targetPan = -Math.round((charMidX / W) * (dw - W));
+    const clampedPan = Math.max(-(dw - W), Math.min(0, targetPan));
+    // Smooth pan
+    roomPanX += (clampedPan - roomPanX) * 0.03;
+
     cx.save();
-    cx.drawImage(img, 0, crop.sy, 1280, crop.sh, 0, dy, dw, dh);
-    // Subtle vignette overlay to blend edges
-    const vg = cx.createLinearGradient(0, dy, 0, GY);
-    vg.addColorStop(0, 'rgba(0,0,0,0.25)');
-    vg.addColorStop(0.12, 'rgba(0,0,0,0)');
-    vg.addColorStop(0.88, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.15)');
-    cx.fillStyle = vg; cx.fillRect(0, dy, dw, dh);
-    // Side vignettes
-    const vl = cx.createLinearGradient(0, 0, 40, 0);
-    vl.addColorStop(0,'rgba(0,0,0,0.6)'); vl.addColorStop(1,'rgba(0,0,0,0)');
-    cx.fillStyle = vl; cx.fillRect(0, dy, 40, dh);
-    const vr = cx.createLinearGradient(W-40, 0, W, 0);
-    vr.addColorStop(0,'rgba(0,0,0,0)'); vr.addColorStop(1,'rgba(0,0,0,0.6)');
-    cx.fillStyle = vr; cx.fillRect(W-40, dy, 40, dh);
+    // Draw room image at native aspect, panned
+    cx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
+                 Math.round(roomPanX), 0, dw, dh);
     cx.restore();
-
-    // Animated candle flicker glow over the art
-    const cflk = Math.sin(T*6.5)*0.12+0.88;
-    const cg = cx.createRadialGradient(W/2, GY-20, 0, W/2, GY-20, 80);
-    cg.addColorStop(0, `rgba(255,160,40,${0.18*cflk})`);
-    cg.addColorStop(1, 'transparent');
-    cx.fillStyle = cg; cx.fillRect(W/2-80, GY-100, 160, 100);
   } else {
-    // Fallback: procedural shelter
-    cx.fillStyle = '#08090e';
-    cx.fillRect(22, GY-155, W-44, 155);
-    cx.strokeStyle = '#0c0e14'; cx.lineWidth = 2;
-    for (let i = 1; i < 6; i++) { cx.beginPath(); cx.moveTo(22, GY-155+i*26); cx.lineTo(W-22, GY-155+i*26); cx.stroke(); }
-    const wflk = Math.sin(T*6)*0.15+0.85;
-    const cy2 = GY - 28, cg = cx.createRadialGradient(150, cy2, 0, 150, cy2, 50);
-    cg.addColorStop(0, `rgba(255,170,50,${0.38*wflk})`); cg.addColorStop(1, 'transparent');
-    cx.fillStyle = cg; cx.fillRect(100, cy2-50, 100, 50);
-    cx.fillStyle = `rgba(255,200,60,${wflk})`;
-    cx.beginPath(); cx.ellipse(150, cy2-14, 3, 5+Math.sin(T*8)*0.8, 0, 0, Math.PI*2); cx.fill();
+    // Fallback dark room
+    cx.fillStyle = '#07080d';
+    cx.fillRect(0, 0, W, H);
   }
 }
 
@@ -790,31 +842,29 @@ function drawChars() {
     // Eli: seated crafting (row 2) — animate between frame 0-2
     const actionT = Math.floor(T * 2) % 6;
 
+    // DAY: characters stand on room floor — room art floor at ~70% of scaled height
+    // Room image scaled to H=820, floor at ~y 590-600
+    const dayFloor = Math.round(H * 0.72);
     if (S.mara.alive) {
-      if (ASSETS.action2) {
-        // Alternate between hammer pose (fr0) and lift pose (fr1)
-        const mFr = Math.floor(T * 2.5) % 2;
-        drawActionSprite(cx, 110, GY, 0, mFr, '#c8a96e', 110);
-      } else {
-        charSprite(cx, 95, GY, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
-      }
+      const mFr = Math.floor(T * 2) % 8;
+      if (ASSETS.walkClean) drawCleanSprite(cx, 140, dayFloor, 0, mFr, 115);
+      else charSprite(cx, 140, dayFloor, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
     }
     if (S.eli.alive) {
-      if (ASSETS.action2) {
-        // Eli: seated crafting cycle (row 2, frames 0-2)
-        const eFr = Math.floor(T * 1.8) % 3;
-        drawActionSprite(cx, 250, GY, 2, eFr, '#4a9eff', 108);
-      } else {
-        charSprite(cx, 200, GY, eliWalk*0.5, '#4a9eff', SPRITES.eli, 'eli');
-      }
+      const eFr = (Math.floor(T * 2) + 4) % 8;
+      if (ASSETS.walkClean) drawCleanSprite(cx, 275, dayFloor, 0, eFr, 115);
+      else charSprite(cx, 275, dayFloor, eliWalk*0.5, '#4a9eff', SPRITES.eli, 'eli');
     }
     maraWalk += 0.025; eliWalk += 0.025;
   } else {
     // ── NIGHT: scavenger walks across screen, other waits at home ───────
     const walkFn = (x, glow, wt) => {
-      if (ASSETS.main) {
-        // Use smooth 10-frame walk (row 0) or crouch-walk (row 2) for night
-        const rowIdx = nightFade > 0.6 ? 2 : 0; // crouch when fully dark
+      if (ASSETS.walkClean) {
+        const rowIdx = nightFade > 0.6 ? 2 : 0; // crouch when fully dark, walk otherwise
+        const fi = Math.abs(Math.floor(wt * 8)) % CLEAN_ROWS[rowIdx].frames;
+        drawCleanSprite(cx, x, GY, rowIdx, fi, 100);
+      } else if (ASSETS.main) {
+        const rowIdx = nightFade > 0.6 ? 2 : 0;
         const fi = Math.abs(Math.floor(wt * 10)) % MAIN_ROWS[rowIdx].frames;
         drawMainSprite(cx, x, GY, rowIdx, fi, glow, 92);
       } else {
