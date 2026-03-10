@@ -853,7 +853,7 @@ function drawChars() {
     // DAY: two characters in room — sprite frames ≈1:1 aspect, so height controls width too
     // At charH=160px → charW≈160px → two chars at x=100,x=310 fit cleanly on 420px canvas
     const dayFloor = GY + 8;  // stand on the ground line
-    const charH = 160;
+    const charH = 240;
     // Base camp: idle animation, 3fps idle cycle, context-specific poses
     // Mara: hammer/warm-up; Eli: cook/idle — use atlas actions
     const idleFr = Math.floor(T * 1.5) % 3; // 1.5 cycles/sec through 3 idle frames
@@ -872,7 +872,7 @@ function drawChars() {
     // ── NIGHT: scavenger walks across screen, other waits at home ───────
     // Scavenging: solo character, larger than base (single char so more room)
     // charH=180 → charW≈180px, leaves room on both sides of 420px canvas
-    const scavCharH = 180;
+    const scavCharH = 240;
     const scavFloor = Math.round(H * 0.72) + 10; // outdoor ground horizon
     const walkFn = (x, glow, wt) => {
       if (ASSETS.atlas) {
