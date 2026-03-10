@@ -362,7 +362,7 @@ function extractMainFrame(rowIdx, frameIdx, glow, targetH) {
   if (!ASSETS.main || !row) return null;
   const fi = Math.min(frameIdx, row.frames - 1);
   const targetW = Math.round(MAIN_FRAME_W * targetH / row.h);
-  const cacheKey = `${rowIdx}_${fi}_${glow}_${targetH}`;
+  const cacheKey = `${rowIdx}_${fi}_${targetH}`;
   let cached = _mainCache.get(cacheKey);
   if (cached) return cached;
 
@@ -383,23 +383,19 @@ function extractMainFrame(rowIdx, frameIdx, glow, targetH) {
       px[i+3] = Math.round(px[i+3] * (1 - blueStrength));
     }
   }
+  // Keep original art colors — no tint
   octx.putImageData(id, 0, 0);
-
-  // Tint with glow color
-  octx.globalCompositeOperation = 'source-in';
-  octx.fillStyle = glow;
-  octx.fillRect(0, 0, targetW, targetH);
 
   _mainCache.set(cacheKey, oc);
   return oc;
 }
 
 function drawMainSprite(ctx, x, y, rowIdx, frameIdx, glow, scale) {
-  const tinted = extractMainFrame(rowIdx, frameIdx, glow, scale || 90);
-  if (!tinted) return;
+  const frame = extractMainFrame(rowIdx, frameIdx, glow, scale || 90);
+  if (!frame) return;
   ctx.save();
-  ctx.shadowColor = glow; ctx.shadowBlur = 16;
-  ctx.drawImage(tinted, x - tinted.width/2, y - tinted.height);
+  ctx.filter = 'brightness(1.8) contrast(1.15)';
+  ctx.drawImage(frame, x - frame.width/2, y - frame.height);
   ctx.restore();
 }
 
@@ -481,7 +477,7 @@ function drawActionSprite(ctx, x, y, rowIdx, frameIdx, glow, scale) {
   const fi = Math.min(frameIdx, row.frames - 1);
   const targetH = scale || 90;
   const targetW = Math.round(ACTION_FRAME_W * targetH / row.h);
-  const cacheKey = `${rowIdx}_${fi}_${glow}_${targetH}`;
+  const cacheKey = `${rowIdx}_${fi}_${targetH}`;
 
   let tinted = _actionCache.get(cacheKey);
   if (!tinted) {
@@ -506,19 +502,15 @@ function drawActionSprite(ctx, x, y, rowIdx, frameIdx, glow, scale) {
       }
       // else: keep character pixels at full alpha
     }
+    // Keep original art colors — no tint
     octx.putImageData(id, 0, 0);
-
-    // Apply glow tint using source-in
-    octx.globalCompositeOperation = 'source-in';
-    octx.fillStyle = glow;
-    octx.fillRect(0, 0, targetW, targetH);
 
     tinted = oc;
     _actionCache.set(cacheKey, tinted);
   }
 
   ctx.save();
-  ctx.shadowColor = glow; ctx.shadowBlur = 18;
+  ctx.filter = 'brightness(1.8) contrast(1.15)';
   ctx.drawImage(tinted, x - targetW/2, y - targetH);
   ctx.restore();
 }
@@ -803,7 +795,7 @@ function drawChars() {
       if (ASSETS.action2) {
         // Alternate between hammer pose (fr0) and lift pose (fr1)
         const mFr = Math.floor(T * 2.5) % 2;
-        drawActionSprite(cx, 110, GY, 0, mFr, '#c8a96e', 95);
+        drawActionSprite(cx, 110, GY, 0, mFr, '#c8a96e', 110);
       } else {
         charSprite(cx, 95, GY, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
       }
@@ -812,7 +804,7 @@ function drawChars() {
       if (ASSETS.action2) {
         // Eli: seated crafting cycle (row 2, frames 0-2)
         const eFr = Math.floor(T * 1.8) % 3;
-        drawActionSprite(cx, 250, GY, 2, eFr, '#4a9eff', 90);
+        drawActionSprite(cx, 250, GY, 2, eFr, '#4a9eff', 108);
       } else {
         charSprite(cx, 200, GY, eliWalk*0.5, '#4a9eff', SPRITES.eli, 'eli');
       }
@@ -1034,29 +1026,19 @@ function charSprite(ctx, x, y, walk, glow, spriteArr, style) {
   const dw = Math.round(f.width * scale);
   const dh = targetH;
 
-  const cacheKey = f.width + '_' + f.height + '_' + glow + '_' + fi;
-  let tinted = tintCache.get(cacheKey);
-  if (!tinted) {
-    tinted = document.createElement('canvas');
-    tinted.width = dw; tinted.height = dh;
-    const tctx = tinted.getContext('2d');
-    tctx.drawImage(f, 0, 0, dw, dh);
-    tctx.globalCompositeOperation = 'source-in';
-    tctx.fillStyle = glow;
-    tctx.fillRect(0, 0, dw, dh);
-    tintCache.set(cacheKey, tinted);
+  // Draw sprite with original art colors — no tint, no glow
+  const cacheKey = f.width + '_' + f.height + '_' + fi;
+  let cached = tintCache.get(cacheKey);
+  if (!cached) {
+    cached = document.createElement('canvas');
+    cached.width = dw; cached.height = dh;
+    cached.getContext('2d').drawImage(f, 0, 0, dw, dh);
+    tintCache.set(cacheKey, cached);
   }
 
   ctx.save();
-  ctx.shadowColor = glow;
-  ctx.shadowBlur = 14;
-  ctx.drawImage(tinted, x - dw/2, y - dh);
-  ctx.restore();
-
-  // Ground shadow
-  ctx.save();
-  ctx.fillStyle = glow.replace(')', ',0.1)').replace('rgb','rgba');
-  ctx.beginPath(); ctx.ellipse(x, y+2, dw*0.4, 4, 0, 0, Math.PI*2); ctx.fill();
+  ctx.filter = 'brightness(1.8) contrast(1.15)';
+  ctx.drawImage(cached, x - dw/2, y - dh);
   ctx.restore();
 }
 
