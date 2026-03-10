@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Holdout — Draft</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e8e0d0;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  #game {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .header {
+    text-align: center;
+    padding: 10px;
+    background: #0d0d1a;
+    border: 1px solid #333;
+  }
+  .header h1 { color: #c8a96e; font-size: 20px; letter-spacing: 4px; }
+  .header .phase { color: #4a9eff; font-size: 11px; margin-top: 4px; letter-spacing: 2px; }
+
+  /* Characters */
+  .characters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .char-card {
+    background: #2d2d44;
+    border: 1px solid #444;
+    padding: 10px;
+    position: relative;
+  }
+  .char-card.dead { opacity: 0.4; border-color: #e94560; }
+  .char-name { color: #c8a96e; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
+  .char-role { color: #777; font-size: 10px; margin-bottom: 8px; }
+  .stat-bar { margin-bottom: 4px; }
+  .stat-label { font-size: 10px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .bar-bg { background: #1a1a2e; height: 6px; }
+  .bar-fill { height: 6px; transition: width 0.4s; }
+  .bar-health { background: #7ac74f; }
+  .bar-hunger { background: #c8a96e; }
+  .bar-mood { background: #4a9eff; }
+  .char-status { font-size: 10px; color: #e94560; margin-top: 6px; min-height: 14px; }
+
+  /* Base camp */
+  .base-section { background: #2d2d44; border: 1px solid #444; padding: 10px; }
+  .section-title { color: #c8a96e; font-size: 11px; letter-spacing: 2px; margin-bottom: 8px; }
+  .rooms { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .room {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    padding: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .room:hover { border-color: #c8a96e; }
+  .room.active { border-color: #4a9eff; }
+  .room-name { font-size: 11px; color: #e8e0d0; margin-bottom: 2px; }
+  .room-level { font-size: 10px; color: #4a9eff; }
+  .room-effect { font-size: 9px; color: #777; margin-top: 2px; }
+
+  /* Resources */
+  .resources { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .resource {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    padding: 6px;
+    text-align: center;
+  }
+  .res-icon { font-size: 16px; }
+  .res-name { font-size: 9px; color: #777; margin-top: 2px; }
+  .res-val { font-size: 13px; color: #e8e0d0; font-weight: bold; }
+
+  /* Actions */
+  .actions { display: flex; flex-direction: column; gap: 6px; }
+  .action-btn {
+    background: #1a1a2e;
+    border: 1px solid #444;
+    color: #e8e0d0;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    text-align: left;
+    transition: background 0.2s, border-color 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .action-btn:hover { background: #2d2d44; border-color: #c8a96e; }
+  .action-btn:disabled { opacity: 0.3; cursor: default; }
+  .action-btn:disabled:hover { background: #1a1a2e; border-color: #444; }
+  .action-cost { color: #c8a96e; font-size: 11px; }
+  .action-btn.danger { border-color: #e94560; }
+  .action-btn.danger:hover { background: #2a1a1e; }
+
+  /* Event log */
+  .log {
+    background: #0d0d1a;
+    border: 1px solid #333;
+    padding: 10px;
+    height: 90px;
+    overflow-y: auto;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .log-line { color: #aaa; }
+  .log-line.important { color: #e8e0d0; }
+  .log-line.danger { color: #e94560; }
+  .log-line.good { color: #7ac74f; }
+  .log-line.moral { color: #a855f7; }
+
+  /* Phase transition */
+  .phase-btn {
+    background: #0d0d1a;
+    border: 2px solid #4a9eff;
+    color: #4a9eff;
+    padding: 12px;
+    width: 100%;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+  .phase-btn:hover { background: #4a9eff; color: #0d0d1a; }
+  .phase-btn.night { border-color: #e94560; color: #e94560; }
+  .phase-btn.night:hover { background: #e94560; color: #0d0d1a; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #2d2d44;
+    border: 1px solid #c8a96e;
+    padding: 20px;
+    max-width: 360px;
+    width: 100%;
+  }
+  .modal-title { color: #c8a96e; font-size: 14px; letter-spacing: 2px; margin-bottom: 10px; }
+  .modal-text { color: #e8e0d0; font-size: 12px; line-height: 1.7; margin-bottom: 16px; }
+  .modal-choices { display: flex; flex-direction: column; gap: 8px; }
+  .choice-btn {
+    background: #1a1a2e;
+    border: 1px solid #444;
+    color: #e8e0d0;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    text-align: left;
+    line-height: 1.5;
+  }
+  .choice-btn:hover { border-color: #c8a96e; background: #1e1e35; }
+  .choice-btn.moral-bad { border-left: 3px solid #e94560; }
+  .choice-btn.moral-good { border-left: 3px solid #7ac74f; }
+
+  /* Moral weight bar */
+  .moral-track { background: #1a1a2e; border: 1px solid #333; padding: 8px 10px; }
+  .moral-label { font-size: 10px; color: #777; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .moral-bar-bg { background: #e94560; height: 6px; position: relative; }
+  .moral-bar-good { background: #7ac74f; height: 6px; position: absolute; top: 0; left: 0; transition: width 0.5s; }
+
+  /* Day counter */
+  .day-track { text-align: center; font-size: 11px; color: #777; padding: 4px; }
+  .day-track span { color: #c8a96e; }
+
+  /* Game over */
+  #gameover {
+    display: none;
+    text-align: center;
+    padding: 30px 20px;
+    background: #0d0d1a;
+    border: 1px solid #e94560;
+  }
+  #gameover h2 { color: #e94560; font-size: 24px; letter-spacing: 4px; margin-bottom: 16px; }
+  #gameover .stats { color: #aaa; font-size: 12px; line-height: 2; margin-bottom: 20px; }
+  #gameover button {
+    background: #1a1a2e;
+    border: 1px solid #c8a96e;
+    color: #c8a96e;
+    padding: 10px 24px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <div class="header">
+    <h1>HOLDOUT</h1>
+    <div class="phase" id="phaseLabel">— DAY 1 — BASE CAMP —</div>
+  </div>
+
+  <div class="day-track">Day <span id="dayNum">1</span> · <span id="moralScore" style="color:#7ac74f">Moral: Righteous</span></div>
+
+  <!-- Characters -->
+  <div class="characters">
+    <div class="char-card" id="maraCard">
+      <div class="char-name">MARA</div>
+      <div class="char-role">Scavenger · pragmatist</div>
+      <div class="stat-bar">
+        <div class="stat-label"><span>Health</span><span id="maraHp">100</span></div>
+        <div class="bar-bg"><div class="bar-fill bar-health" id="maraHpBar" style="width:100%"></div></div>
+      </div>
+      <div class="stat-bar">
+        <div class="stat-label"><span>Hunger</span><span id="maraHunger">80</span></div>
+        <div class="bar-bg"><div class="bar-fill bar-hunger" id="maraHungerBar" style="width:80%"></div></div>
+      </div>
+      <div class="stat-bar">
+        <div class="stat-label"><span>Mood</span><span id="maraMood">90</span></div>
+        <div class="bar-bg"><div class="bar-fill bar-mood" id="maraMoodBar" style="width:90%"></div></div>
+      </div>
+      <div class="char-status" id="maraStatus"></div>
+    </div>
+    <div class="char-card" id="eliCard">
+      <div class="char-name">ELI</div>
+      <div class="char-role">Builder · principled</div>
+      <div class="stat-bar">
+        <div class="stat-label"><span>Health</span><span id="eliHp">100</span></div>
+        <div class="bar-bg"><div class="bar-fill bar-health" id="eliHpBar" style="width:100%"></div></div>
+      </div>
+      <div class="stat-bar">
+        <div class="stat-label"><span>Hunger</span><span id="eliHunger">80</span></div>
+        <div class="bar-bg"><div class="bar-fill bar-hunger" id="eliHungerBar" style="width:80%"></div></div>
+      </div>
+      <div class="stat-bar">
+        <div class="stat-label"><span>Mood</span><span id="eliMood">85</span></div>
+        <div class="bar-bg"><div class="bar-fill bar-mood" id="eliMoodBar" style="width:85%"></div></div>
+      </div>
+      <div class="char-status" id="eliStatus"></div>
+    </div>
+  </div>
+
+  <!-- Moral weight -->
+  <div class="moral-track">
+    <div class="moral-label"><span>MORAL WEIGHT</span><span id="moralPct">80%</span></div>
+    <div class="moral-bar-bg">
+      <div class="moral-bar-good" id="moralBar" style="width:80%"></div>
+    </div>
+  </div>
+
+  <!-- Resources -->
+  <div class="base-section">
+    <div class="section-title">RESOURCES</div>
+    <div class="resources">
+      <div class="resource">
+        <div class="res-icon">🍞</div>
+        <div class="res-val" id="resFood">8</div>
+        <div class="res-name">food</div>
+      </div>
+      <div class="resource">
+        <div class="res-icon">💊</div>
+        <div class="res-val" id="resMeds">2</div>
+        <div class="res-name">meds</div>
+      </div>
+      <div class="resource">
+        <div class="res-icon">🔩</div>
+        <div class="res-val" id="resMats">5</div>
+        <div class="res-name">parts</div>
+      </div>
+      <div class="resource">
+        <div class="res-icon">🔋</div>
+        <div class="res-val" id="resFuel">3</div>
+        <div class="res-name">fuel</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Base rooms -->
+  <div class="base-section" id="daySection">
+    <div class="section-title">BASE CAMP — ACTIONS</div>
+    <div class="actions" id="dayActions">
+      <button class="action-btn" onclick="feedChars()">
+        <span>🍞 Feed both survivors</span>
+        <span class="action-cost">-2 food</span>
+      </button>
+      <button class="action-btn" onclick="healChar('mara')">
+        <span>💊 Treat Mara</span>
+        <span class="action-cost">-1 meds</span>
+      </button>
+      <button class="action-btn" onclick="healChar('eli')">
+        <span>💊 Treat Eli</span>
+        <span class="action-cost">-1 meds</span>
+      </button>
+      <button class="action-btn" onclick="buildRoom()">
+        <span>🔩 Reinforce shelter (Eli)</span>
+        <span class="action-cost">-2 parts</span>
+      </button>
+      <button class="action-btn" onclick="rest()">
+        <span>💤 Rest — both sleep</span>
+        <span class="action-cost">+mood, costs time</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Event log -->
+  <div class="log" id="log">
+    <div class="log-line important">Day 1. The shelter is cold but holding.</div>
+    <div class="log-line">Mara checks the perimeter. Eli boards up a window.</div>
+  </div>
+
+  <!-- Phase button -->
+  <button class="phase-btn night" id="phaseBtn" onclick="beginNight()">
+    ▶ SEND OUT TO SCAVENGE
+  </button>
+</div>
+
+<!-- Night event modal -->
+<div class="modal-overlay" id="eventModal">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">EVENT</div>
+    <div class="modal-text" id="modalText"></div>
+    <div class="modal-choices" id="modalChoices"></div>
+  </div>
+</div>
+
+<!-- Game over -->
+<div id="gameover">
+  <h2>EVERYONE IS GONE</h2>
+  <div class="stats" id="gameoverStats"></div>
+  <button onclick="resetGame()">PLAY AGAIN</button>
+</div>
+
+<script>
+const state = {
+  day: 1,
+  phase: 'day', // day | night
+  moral: 80,
+  food: 8, meds: 2, parts: 5, fuel: 3,
+  mara: { hp: 100, hunger: 80, mood: 90, alive: true },
+  eli:  { hp: 100, hunger: 80, mood: 85, alive: true },
+  shelterLevel: 1,
+  scavengesDone: 0,
+};
+
+const NIGHT_EVENTS = [
+  {
+    id: 'stranger',
+    title: 'A STRANGER AT THE DOOR',
+    text: 'A woman and child. Starving. They found your shelter somehow. Letting them in means less food. Turning them away means...',
+    choices: [
+      { text: 'Let them in. Share what you have.', type: 'good', effect: () => { state.food = Math.max(0, state.food - 3); state.moral = Math.min(100, state.moral + 12); log('You let them in. Three less rations. The child stops crying.', 'good'); } },
+      { text: 'Turn them away. You can\'t risk it.', type: 'bad', effect: () => { state.moral = Math.max(0, state.moral - 18); state.eli.mood = Math.max(0, state.eli.mood - 20); log('Eli can\'t look at you. The door stays shut.', 'moral'); } },
+      { text: 'Give them one meal and send them off.', type: 'neutral', effect: () => { state.food = Math.max(0, state.food - 1); state.moral = Math.max(0, state.moral - 5); log('One meal. A direction. Maybe they make it.', 'important'); } },
+    ]
+  },
+  {
+    id: 'cache',
+    title: 'ABANDONED STORE',
+    text: 'Mara found a hardware store. Mostly looted. But there\'s a family huddled in the back — they got here first.',
+    choices: [
+      { text: 'Take only what\'s clearly unclaimed.', type: 'good', effect: () => { state.parts += 2; state.moral = Math.min(100, state.moral + 6); log('You take the loose bolts and wire. They don\'t stop you.', 'good'); } },
+      { text: 'Take everything. You need it more.', type: 'bad', effect: () => { state.parts += 6; state.moral = Math.max(0, state.moral - 22); log('Mara clears the shelves. No one fights back. That almost makes it worse.', 'danger'); } },
+      { text: 'Trade — food for parts.', type: 'neutral', effect: () => { if(state.food >= 2) { state.food -= 2; state.parts += 4; log('Food for parts. Fair enough.', 'important'); } else { log('Not enough food to trade.', 'danger'); } } },
+    ]
+  },
+  {
+    id: 'raiders',
+    title: 'RAIDERS SPOTTED',
+    text: 'Three armed figures circling the block. They haven\'t found the shelter yet. Eli wants to warn the neighbors.',
+    choices: [
+      { text: 'Warn the neighbors — knock quietly.', type: 'good', effect: () => { state.moral = Math.min(100, state.moral + 8); state.eli.mood = Math.min(100, state.eli.mood + 15); log('The neighbors get out in time. Eli nods at you.', 'good'); } },
+      { text: 'Stay hidden. Don\'t draw attention.', type: 'neutral', effect: () => { state.mara.hp = Math.max(0, state.mara.hp - 5); log('Mara takes a bruise staying low. The raiders move on.', 'important'); } },
+      { text: 'Set a distraction — burn the fuel.', type: 'risky', effect: () => { state.fuel = Math.max(0, state.fuel - 2); state.food += 3; log('The fire draws them away. You ransack their drop bag.', 'good'); } },
+    ]
+  },
+  {
+    id: 'medicine',
+    title: 'CLINIC SUPPLIES',
+    text: 'An unlocked clinic. Half the meds are gone. Someone\'s been using it — a makeshift note says "please leave some."',
+    choices: [
+      { text: 'Take half. Leave half.', type: 'good', effect: () => { state.meds += 2; state.moral = Math.min(100, state.moral + 10); log('Two bottles. You leave the antibiotics.', 'good'); } },
+      { text: 'Take it all — you need it.', type: 'bad', effect: () => { state.meds += 4; state.moral = Math.max(0, state.moral - 15); log('Four bottles. The note tears when you pocket the last one.', 'moral'); } },
+    ]
+  },
+  {
+    id: 'food_cache',
+    title: 'BURIED CACHE',
+    text: 'Mara digs up a buried cache near the old park. Enough food for a week. It\'s marked with a child\'s drawing.',
+    choices: [
+      { text: 'Take it. Survival first.', type: 'bad', effect: () => { state.food += 7; state.moral = Math.max(0, state.moral - 10); log('Seven rations. The drawing goes back in the ground.', 'moral'); } },
+      { text: 'Take half, leave the rest marked.', type: 'good', effect: () => { state.food += 3; state.moral = Math.min(100, state.moral + 5); log('Three rations. The marker stays.', 'good'); } },
+    ]
+  },
+];
+
+let usedEvents = [];
+
+function getMoralLabel(m) {
+  if (m >= 85) return 'Righteous';
+  if (m >= 65) return 'Decent';
+  if (m >= 40) return 'Compromised';
+  if (m >= 20) return 'Hardened';
+  return 'Lost';
+}
+
+function getMoralColor(m) {
+  if (m >= 65) return '#7ac74f';
+  if (m >= 40) return '#c8a96e';
+  return '#e94560';
+}
+
+function updateUI() {
+  const s = state;
+  // Characters
+  const chars = ['mara', 'eli'];
+  chars.forEach(c => {
+    const d = s[c];
+    document.getElementById(c + 'Hp').textContent = Math.round(d.hp);
+    document.getElementById(c + 'HpBar').style.width = d.hp + '%';
+    document.getElementById(c + 'Hunger').textContent = Math.round(d.hunger);
+    document.getElementById(c + 'HungerBar').style.width = d.hunger + '%';
+    document.getElementById(c + 'Mood').textContent = Math.round(d.mood);
+    document.getElementById(c + 'MoodBar').style.width = d.mood + '%';
+
+    const card = document.getElementById(c + 'Card');
+    const statusEl = document.getElementById(c + 'Status');
+    if (!d.alive) {
+      card.classList.add('dead');
+      statusEl.textContent = '— deceased —';
+    } else {
+      card.classList.remove('dead');
+      const warnings = [];
+      if (d.hp < 30) warnings.push('critical');
+      if (d.hunger < 25) warnings.push('starving');
+      if (d.mood < 20) warnings.push('breaking down');
+      statusEl.textContent = warnings.join(' · ');
+    }
+  });
+
+  // Resources
+  document.getElementById('resFood').textContent = s.food;
+  document.getElementById('resMeds').textContent = s.meds;
+  document.getElementById('resMats').textContent = s.parts;
+  document.getElementById('resFuel').textContent = s.fuel;
+
+  // Day + moral
+  document.getElementById('dayNum').textContent = s.day;
+  const moralEl = document.getElementById('moralScore');
+  moralEl.textContent = 'Moral: ' + getMoralLabel(s.moral);
+  moralEl.style.color = getMoralColor(s.moral);
+  document.getElementById('moralPct').textContent = Math.round(s.moral) + '%';
+  document.getElementById('moralBar').style.width = s.moral + '%';
+
+  // Phase
+  const isDay = s.phase === 'day';
+  document.getElementById('phaseLabel').textContent = isDay
+    ? `— DAY ${s.day} — BASE CAMP —`
+    : `— DAY ${s.day} — NIGHT SCAVENGE —`;
+  document.getElementById('daySection').style.display = isDay ? '' : 'none';
+
+  const btn = document.getElementById('phaseBtn');
+  if (isDay) {
+    btn.textContent = '▶ SEND OUT TO SCAVENGE';
+    btn.className = 'phase-btn night';
+  } else {
+    btn.textContent = '▶ RETURN TO BASE — END NIGHT';
+    btn.className = 'phase-btn';
+  }
+}
+
+function log(msg, type = '') {
+  const logEl = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-line' + (type ? ' ' + type : '');
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function applyHungerDecay() {
+  ['mara', 'eli'].forEach(c => {
+    const d = state[c];
+    if (!d.alive) return;
+    d.hunger = Math.max(0, d.hunger - 15);
+    if (d.hunger <= 0) {
+      d.hp = Math.max(0, d.hp - 10);
+      log(c.charAt(0).toUpperCase() + c.slice(1) + ' is starving.', 'danger');
+    }
+    if (d.hp <= 0 && d.alive) {
+      d.alive = false;
+      log(c.charAt(0).toUpperCase() + c.slice(1) + ' has died.', 'danger');
+    }
+  });
+}
+
+function checkGameOver() {
+  if (!state.mara.alive && !state.eli.alive) {
+    setTimeout(() => {
+      document.getElementById('game').style.display = 'none';
+      const go = document.getElementById('gameover');
+      go.style.display = 'block';
+      const label = getMoralLabel(state.moral);
+      document.getElementById('gameoverStats').innerHTML =
+        `Survived ${state.day} days<br>Moral standing: ${label}<br>Food remaining: ${state.food}`;
+    }, 800);
+    return true;
+  }
+  return false;
+}
+
+function feedChars() {
+  if (state.food < 2) { log('Not enough food.', 'danger'); return; }
+  state.food -= 2;
+  if (state.mara.alive) { state.mara.hunger = Math.min(100, state.mara.hunger + 35); }
+  if (state.eli.alive)  { state.eli.hunger  = Math.min(100, state.eli.hunger  + 35); }
+  log('Both eat. Hunger recedes a little.', 'good');
+  updateUI();
+}
+
+function healChar(c) {
+  const d = state[c];
+  if (!d.alive) { log('They\'re gone.', 'danger'); return; }
+  if (state.meds < 1) { log('No meds left.', 'danger'); return; }
+  state.meds -= 1;
+  d.hp = Math.min(100, d.hp + 30);
+  log((c === 'mara' ? 'Mara' : 'Eli') + ' treated. Vitals improve.', 'good');
+  updateUI();
+}
+
+function buildRoom() {
+  if (state.parts < 2) { log('Not enough parts.', 'danger'); return; }
+  if (!state.eli.alive) { log('Eli isn\'t here to build.', 'danger'); return; }
+  state.parts -= 2;
+  state.shelterLevel = Math.min(5, state.shelterLevel + 1);
+  state.eli.mood = Math.min(100, state.eli.mood + 10);
+  log('Eli reinforces the walls. Shelter level ' + state.shelterLevel + '.', 'good');
+  updateUI();
+}
+
+function rest() {
+  if (state.mara.alive) state.mara.mood = Math.min(100, state.mara.mood + 20);
+  if (state.eli.alive)  state.eli.mood  = Math.min(100, state.eli.mood  + 20);
+  applyHungerDecay();
+  log('Both rest. Dreams of before.', 'important');
+  if (!checkGameOver()) updateUI();
+}
+
+let currentEventQueue = [];
+
+function beginNight() {
+  if (state.phase === 'day') {
+    state.phase = 'night';
+    applyHungerDecay();
+    if (checkGameOver()) return;
+    state.scavengesDone = 0;
+
+    // Queue 2 random events
+    const pool = NIGHT_EVENTS.filter(e => !usedEvents.includes(e.id));
+    if (pool.length === 0) { usedEvents = []; }
+    const shuffled = [...(pool.length ? pool : NIGHT_EVENTS)].sort(() => Math.random() - 0.5);
+    currentEventQueue = shuffled.slice(0, 2);
+
+    log('— Night falls. Mara heads out. —', 'important');
+    updateUI();
+    setTimeout(showNextEvent, 600);
+  } else {
+    endNight();
+  }
+}
+
+function showNextEvent() {
+  if (currentEventQueue.length === 0) {
+    // Passive scavenge loot
+    const loot = Math.random();
+    if (loot > 0.5) {
+      const amount = 1 + Math.floor(Math.random() * 3);
+      const type = ['food', 'meds', 'parts', 'fuel'][Math.floor(Math.random() * 4)];
+      state[type === 'food' ? 'food' : type === 'meds' ? 'meds' : type === 'parts' ? 'parts' : 'fuel'] += amount;
+      log('Mara finds ' + amount + ' ' + type + ' on the way back.', 'good');
+    }
+    updateUI();
+    return;
+  }
+  const event = currentEventQueue.shift();
+  usedEvents.push(event.id);
+  showEvent(event);
+}
+
+function showEvent(event) {
+  document.getElementById('modalTitle').textContent = event.title;
+  document.getElementById('modalText').textContent = event.text;
+  const choicesEl = document.getElementById('modalChoices');
+  choicesEl.innerHTML = '';
+  event.choices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn' + (choice.type === 'bad' ? ' moral-bad' : choice.type === 'good' ? ' moral-good' : '');
+    btn.textContent = choice.text;
+    btn.onclick = () => {
+      choice.effect();
+      document.getElementById('eventModal').classList.remove('open');
+      updateUI();
+      setTimeout(showNextEvent, 400);
+    };
+    choicesEl.appendChild(btn);
+  });
+  document.getElementById('eventModal').classList.add('open');
+}
+
+function endNight() {
+  state.phase = 'day';
+  state.day += 1;
+  // Shelter protects a little
+  const shelterBonus = state.shelterLevel * 2;
+  if (state.mara.alive) state.mara.mood = Math.max(0, state.mara.mood - Math.max(0, 10 - shelterBonus));
+  if (state.eli.alive)  state.eli.mood  = Math.max(0, state.eli.mood  - Math.max(0, 8  - shelterBonus));
+  log('— Day ' + state.day + '. Still here. —', 'important');
+  if (!checkGameOver()) updateUI();
+}
+
+function resetGame() {
+  Object.assign(state, {
+    day: 1, phase: 'day', moral: 80,
+    food: 8, meds: 2, parts: 5, fuel: 3,
+    mara: { hp: 100, hunger: 80, mood: 90, alive: true },
+    eli:  { hp: 100, hunger: 80, mood: 85, alive: true },
+    shelterLevel: 1, scavengesDone: 0,
+  });
+  usedEvents = [];
+  document.getElementById('game').style.display = '';
+  document.getElementById('gameover').style.display = 'none';
+  document.getElementById('log').innerHTML =
+    '<div class="log-line important">Day 1. Start again.</div>';
+  updateUI();
+}
+
+updateUI();
+</script>
+</body>
+</html>
