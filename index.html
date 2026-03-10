@@ -5,1016 +5,910 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>HOLDOUT</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #000;
-    overflow: hidden;
-    width: 100vw;
-    height: 100vh;
-    font-family: 'Courier New', monospace;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  #container {
-    position: relative;
-    width: 420px;
-    height: 100vh;
-    max-height: 820px;
-    overflow: hidden;
-  }
-  canvas { display: block; width: 100%; height: 100%; }
-  #ui {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    display: flex;
-    flex-direction: column;
-    pointer-events: none;
-  }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #000;
+  overflow: hidden;
+  width: 100vw; height: 100vh;
+  font-family: 'Courier New', monospace;
+  display: flex; align-items: center; justify-content: center;
+}
+#wrap {
+  position: relative;
+  width: 420px; height: 100vh; max-height: 820px;
+  overflow: hidden;
+}
+canvas#bg { position: absolute; inset: 0; width: 100%; height: 100%; }
+#ui {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  pointer-events: none;
+}
 
-  /* HUD top bar */
-  #hud {
-    padding: 10px 14px 8px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
-    pointer-events: none;
-  }
-  .hud-title {
-    font-size: 11px;
-    color: #c8a96e;
-    letter-spacing: 4px;
-    text-align: center;
-    margin-bottom: 8px;
-    text-shadow: 0 0 12px rgba(200,169,110,0.8);
-  }
-  .hud-chars {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .hud-char { display: flex; flex-direction: column; gap: 2px; }
-  .hud-name { font-size: 9px; color: #c8a96e; letter-spacing: 2px; }
-  .hud-name.dead { color: #555; text-decoration: line-through; }
-  .mini-bars { display: flex; flex-direction: column; gap: 2px; }
-  .mini-bar-wrap { display: flex; align-items: center; gap: 4px; }
-  .mini-bar-label { font-size: 8px; color: #556; width: 12px; }
-  .mini-bar-bg { flex: 1; height: 3px; background: rgba(255,255,255,0.1); }
-  .mini-bar-fill { height: 3px; transition: width 0.5s; }
-  .bar-hp { background: #7ac74f; }
-  .bar-hunger { background: #c8a96e; }
-  .bar-mood { background: #4a9eff; }
+/* HUD */
+#hud {
+  padding: 10px 14px 6px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.9) 60%, transparent);
+}
+.hud-title {
+  text-align: center; font-size: 10px; letter-spacing: 5px;
+  color: #c8a96e; margin-bottom: 8px;
+  text-shadow: 0 0 14px rgba(200,169,110,0.7);
+}
+.hud-chars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hud-char { display: flex; flex-direction: column; gap: 2px; }
+.hud-name { font-size: 9px; letter-spacing: 2px; display: flex; justify-content: space-between; }
+.hud-name .role { color: #445; }
+.hud-name .name { color: #c8a96e; }
+.hud-name.dead .name { color: #333; text-decoration: line-through; }
+.bars { display: flex; flex-direction: column; gap: 2px; }
+.bar-row { display: flex; align-items: center; gap: 4px; }
+.bar-lbl { font-size: 8px; color: #445; width: 14px; }
+.bar-bg { flex: 1; height: 3px; background: rgba(255,255,255,0.07); border-radius: 1px; }
+.bar-f { height: 3px; border-radius: 1px; transition: width 0.5s ease; }
+.b-hp  { background: #7ac74f; }
+.b-fd  { background: #c8a96e; }
+.b-md  { background: #4a9eff; }
 
-  /* Resources strip */
-  #resources {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    padding: 6px 14px;
-    background: rgba(0,0,0,0.4);
-    font-size: 11px;
-    color: #c8a96e;
-    pointer-events: none;
-  }
-  .res { display: flex; align-items: center; gap: 4px; }
-  .res-icon { font-size: 12px; }
-  .res-val { color: #e8e0d0; }
+/* Resources */
+#res {
+  display: flex; justify-content: center; gap: 20px;
+  padding: 5px 14px;
+  background: rgba(0,0,0,0.45);
+  font-size: 10px; pointer-events: none;
+}
+.rv { display: flex; align-items: center; gap: 4px; }
+.ri { font-size: 11px; }
+.rn { color: #e8e0d0; }
 
-  /* Scene spacer */
-  #scene-space { flex: 1; }
+#gap { flex: 1; }
 
-  /* Moral + day strip */
-  #moral-strip {
-    padding: 5px 14px;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    pointer-events: none;
-  }
-  .moral-label { font-size: 9px; color: #556; letter-spacing: 1px; }
-  .moral-bar-outer { flex: 1; margin: 0 10px; height: 3px; background: rgba(233,69,96,0.4); }
-  .moral-bar-inner { height: 3px; background: #7ac74f; transition: width 0.6s; }
-  .day-label { font-size: 9px; color: #4a9eff; letter-spacing: 1px; }
+/* Moral + day */
+#mbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 14px;
+  background: rgba(0,0,0,0.5);
+}
+.ml { font-size: 9px; color: #445; letter-spacing: 1px; width: 38px; }
+.mo { flex: 1; height: 3px; background: rgba(233,69,96,0.35); border-radius: 1px; }
+.mi { height: 3px; border-radius: 1px; background: #7ac74f; transition: width 0.6s; }
+.dl { font-size: 9px; color: #4a9eff; letter-spacing: 1px; }
 
-  /* Log */
-  #log {
-    height: 48px;
-    overflow: hidden;
-    padding: 0 14px;
-    background: rgba(0,0,0,0.7);
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    padding-bottom: 6px;
-    pointer-events: none;
-  }
-  .log-line {
-    font-size: 10px;
-    color: #667;
-    line-height: 1.5;
-    transition: color 0.5s;
-  }
-  .log-line.new { color: #aaa; }
-  .log-line.good { color: #7ac74f; }
-  .log-line.danger { color: #e94560; }
-  .log-line.moral { color: #a855f7; }
-  .log-line.amber { color: #c8a96e; }
+/* Log */
+#log {
+  height: 44px; overflow: hidden;
+  padding: 0 14px 5px;
+  background: rgba(0,0,0,0.7);
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.ll { font-size: 10px; color: #445; line-height: 1.6; }
+.ll.hi  { color: #999; }
+.ll.good { color: #7ac74f; }
+.ll.bad  { color: #e94560; }
+.ll.amb  { color: #c8a96e; }
+.ll.mor  { color: #a855f7; }
 
-  /* Action buttons */
-  #actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px 12px;
-    background: rgba(0,0,0,0.85);
-    pointer-events: all;
-  }
-  .act-btn {
-    flex: 1 1 calc(50% - 3px);
-    background: transparent;
-    border: 1px solid #333;
-    color: #aaa;
-    font-family: 'Courier New', monospace;
-    font-size: 10px;
-    padding: 7px 8px;
-    cursor: pointer;
-    text-align: left;
-    line-height: 1.4;
-    letter-spacing: 0.5px;
-    transition: border-color 0.2s, color 0.2s, background 0.2s;
-  }
-  .act-btn:hover:not(:disabled) { border-color: #c8a96e; color: #c8a96e; background: rgba(200,169,110,0.06); }
-  .act-btn:disabled { opacity: 0.25; cursor: default; }
-  .act-btn.wide { flex: 1 1 100%; border-color: #1a3a5c; color: #4a9eff; }
-  .act-btn.wide:hover:not(:disabled) { border-color: #4a9eff; background: rgba(74,158,255,0.08); color: #fff; }
-  .act-btn.night-btn { border-color: #3a1a2e; color: #a855f7; }
-  .act-btn.night-btn:hover:not(:disabled) { border-color: #a855f7; background: rgba(168,85,247,0.08); color: #fff; }
-  .act-btn .cost { display: block; font-size: 9px; color: #556; margin-top: 2px; }
+/* Actions panel */
+#act {
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.88);
+  pointer-events: all;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.btn-row { display: flex; gap: 5px; }
+.ab {
+  flex: 1;
+  background: transparent; border: 1px solid #222;
+  color: #778; font-family: 'Courier New', monospace;
+  font-size: 10px; padding: 7px 9px;
+  cursor: pointer; text-align: left; line-height: 1.45;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
+}
+.ab:hover:not(:disabled) { border-color: #c8a96e; color: #c8a96e; background: rgba(200,169,110,0.05); }
+.ab:disabled { opacity: 0.2; cursor: default; }
+.ab .c { display: block; font-size: 9px; color: #445; margin-top: 1px; }
+.ab.full { flex: none; width: 100%; }
+.ab.blue { border-color: #1a3050; color: #4a9eff; }
+.ab.blue:hover:not(:disabled) { border-color: #4a9eff; background: rgba(74,158,255,0.06); color: #cce; }
+.ab.purple { border-color: #2a1a40; color: #a855f7; }
+.ab.purple:hover:not(:disabled) { border-color: #a855f7; background: rgba(168,85,247,0.06); color: #dcc; }
 
-  /* Modal */
-  #modal {
-    display: none;
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0);
-    z-index: 10;
-    flex-direction: column;
-    justify-content: flex-end;
-    pointer-events: all;
-    transition: background 0.3s;
-  }
-  #modal.open {
-    display: flex;
-    background: rgba(0,0,0,0.78);
-  }
-  #modal-inner {
-    background: #090e1a;
-    border-top: 1px solid #c8a96e;
-    padding: 16px 14px 14px;
-    transform: translateY(100%);
-    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1);
-  }
-  #modal.open #modal-inner { transform: translateY(0); }
-  #modal-scene {
-    width: 100%;
-    height: 120px;
-    margin-bottom: 10px;
-    display: block;
-  }
-  #modal-title {
-    font-size: 11px;
-    color: #c8a96e;
-    letter-spacing: 3px;
-    margin-bottom: 6px;
-  }
-  #modal-text {
-    font-size: 11px;
-    color: #889;
-    line-height: 1.7;
-    margin-bottom: 12px;
-  }
-  .choice {
-    background: transparent;
-    border: 1px solid #222;
-    color: #889;
-    font-family: 'Courier New', monospace;
-    font-size: 10px;
-    padding: 9px 12px;
-    width: 100%;
-    text-align: left;
-    cursor: pointer;
-    line-height: 1.5;
-    margin-bottom: 5px;
-    letter-spacing: 0.3px;
-    transition: all 0.2s;
-  }
-  .choice:hover { border-color: #c8a96e; color: #e8e0d0; background: rgba(200,169,110,0.05); }
-  .choice.good { border-left: 2px solid #7ac74f; }
-  .choice.bad  { border-left: 2px solid #e94560; }
+/* Location picker overlay */
+#picker {
+  display: none; position: absolute; inset: 0;
+  background: rgba(0,0,0,0.82);
+  flex-direction: column; justify-content: flex-end;
+  z-index: 5; pointer-events: all;
+}
+#picker.open { display: flex; }
+#picker-inner {
+  background: #07090f;
+  border-top: 1px solid #2a2a3a;
+  padding: 14px 13px 12px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1);
+}
+#picker.open #picker-inner { transform: translateY(0); }
+.pick-title { font-size: 10px; color: #556; letter-spacing: 2px; margin-bottom: 10px; }
+.pick-who { display: flex; gap: 5px; margin-bottom: 10px; }
+.who-btn {
+  flex: 1; background: transparent; border: 1px solid #222;
+  color: #556; font-family: 'Courier New', monospace; font-size: 10px;
+  padding: 7px 5px; cursor: pointer; text-align: center;
+  transition: all 0.18s;
+}
+.who-btn.sel { border-color: #c8a96e; color: #c8a96e; background: rgba(200,169,110,0.08); }
+.who-btn:hover { border-color: #c8a96e; color: #c8a96e; }
+.loc-grid { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.loc-btn {
+  background: transparent; border: 1px solid #1a1a2a;
+  color: #667; font-family: 'Courier New', monospace; font-size: 10px;
+  padding: 9px 11px; cursor: pointer; text-align: left;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: all 0.18s;
+}
+.loc-btn:hover { border-color: #c8a96e; color: #e8e0d0; background: rgba(200,169,110,0.05); }
+.loc-btn.sel { border-color: #c8a96e; background: rgba(200,169,110,0.07); color: #c8a96e; }
+.loc-risk { font-size: 9px; color: #e94560; }
+.loc-risk.low { color: #7ac74f; }
+.loc-risk.med { color: #c8a96e; }
+.confirm-btn {
+  width: 100%; background: transparent; border: 1px solid #2a3a2a;
+  color: #4a7a4a; font-family: 'Courier New', monospace; font-size: 10px;
+  letter-spacing: 2px; padding: 9px; cursor: pointer;
+  transition: all 0.18s;
+}
+.confirm-btn:hover { border-color: #7ac74f; color: #7ac74f; background: rgba(122,199,79,0.05); }
+.confirm-btn:disabled { opacity: 0.2; cursor: default; }
 
-  /* Game over */
-  #gameover {
-    display: none;
-    position: absolute;
-    inset: 0;
-    background: #000;
-    z-index: 20;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    pointer-events: all;
-  }
-  #gameover.open { display: flex; }
-  #gameover h2 { color: #e94560; font-size: 22px; letter-spacing: 6px; margin-bottom: 20px; text-shadow: 0 0 30px rgba(233,69,96,0.6); }
-  #gameover .go-stats { color: #556; font-size: 11px; line-height: 2.2; text-align: center; margin-bottom: 24px; }
-  #gameover .go-stats span { color: #c8a96e; }
-  #replay-btn {
-    background: transparent;
-    border: 1px solid #333;
-    color: #556;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    letter-spacing: 2px;
-    padding: 10px 28px;
-    cursor: pointer;
-  }
-  #replay-btn:hover { border-color: #c8a96e; color: #c8a96e; }
+/* Event modal */
+#modal {
+  display: none; position: absolute; inset: 0;
+  background: rgba(0,0,0,0.82);
+  flex-direction: column; justify-content: flex-end;
+  z-index: 10; pointer-events: all;
+}
+#modal.open { display: flex; }
+#mi {
+  background: #07090f; border-top: 1px solid #c8a96e;
+  padding: 14px 13px 12px;
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(0.22,1,0.36,1);
+}
+#modal.open #mi { transform: translateY(0); }
+#ms { width: 100%; height: 110px; display: block; margin-bottom: 10px; border: 1px solid #0d1020; }
+#mt { font-size: 10px; color: #c8a96e; letter-spacing: 3px; margin-bottom: 6px; }
+#mx { font-size: 10px; color: #667; line-height: 1.7; margin-bottom: 12px; }
+.ch {
+  width: 100%; background: transparent; border: 1px solid #1a1a28;
+  color: #778; font-family: 'Courier New', monospace; font-size: 10px;
+  padding: 9px 11px; text-align: left; cursor: pointer; line-height: 1.5;
+  margin-bottom: 5px; transition: all 0.18s;
+}
+.ch:hover { border-color: #c8a96e; color: #e8e0d0; background: rgba(200,169,110,0.05); }
+.ch.g { border-left: 2px solid #7ac74f; }
+.ch.b { border-left: 2px solid #e94560; }
+
+/* Game over */
+#go {
+  display: none; position: absolute; inset: 0;
+  background: rgba(0,0,0,0.97);
+  flex-direction: column; align-items: center; justify-content: center;
+  z-index: 20; pointer-events: all;
+}
+#go.open { display: flex; }
+#go h2 { color: #e94560; font-size: 20px; letter-spacing: 6px; margin-bottom: 20px; text-shadow: 0 0 30px rgba(233,69,96,0.5); }
+#go .gs { color: #445; font-size: 10px; line-height: 2.4; text-align: center; margin-bottom: 24px; }
+#go .gs span { color: #c8a96e; }
+#rp {
+  background: transparent; border: 1px solid #2a2a2a;
+  color: #445; font-family: 'Courier New', monospace;
+  font-size: 10px; letter-spacing: 2px; padding: 9px 26px; cursor: pointer;
+}
+#rp:hover { border-color: #c8a96e; color: #c8a96e; }
 </style>
 </head>
 <body>
-<div id="container">
-  <canvas id="bg"></canvas>
+<div id="wrap">
+<canvas id="bg"></canvas>
 
-  <div id="ui">
-    <!-- HUD -->
-    <div id="hud">
-      <div class="hud-title">H O L D O U T</div>
-      <div class="hud-chars">
-        <div class="hud-char">
-          <div class="hud-name" id="maraName">MARA</div>
-          <div class="mini-bars">
-            <div class="mini-bar-wrap"><span class="mini-bar-label">HP</span><div class="mini-bar-bg"><div class="mini-bar-fill bar-hp" id="maraHp" style="width:100%"></div></div></div>
-            <div class="mini-bar-wrap"><span class="mini-bar-label">FD</span><div class="mini-bar-bg"><div class="mini-bar-fill bar-hunger" id="maraFd" style="width:80%"></div></div></div>
-            <div class="mini-bar-wrap"><span class="mini-bar-label">MD</span><div class="mini-bar-bg"><div class="mini-bar-fill bar-mood" id="maraMd" style="width:90%"></div></div></div>
-          </div>
+<div id="ui">
+  <div id="hud">
+    <div class="hud-title">H O L D O U T</div>
+    <div class="hud-chars">
+      <div class="hud-char">
+        <div class="hud-name" id="mn"><span class="name">MARA</span><span class="role">scavenger</span></div>
+        <div class="bars">
+          <div class="bar-row"><span class="bar-lbl">HP</span><div class="bar-bg"><div class="bar-f b-hp" id="mhp" style="width:100%"></div></div></div>
+          <div class="bar-row"><span class="bar-lbl">FD</span><div class="bar-bg"><div class="bar-f b-fd" id="mfd" style="width:80%"></div></div></div>
+          <div class="bar-row"><span class="bar-lbl">MD</span><div class="bar-bg"><div class="bar-f b-md" id="mmd" style="width:90%"></div></div></div>
         </div>
-        <div class="hud-char">
-          <div class="hud-name" id="eliName">ELI</div>
-          <div class="mini-bars">
-            <div class="mini-bar-wrap"><span class="mini-bar-label">HP</span><div class="mini-bar-bg"><div class="mini-bar-fill bar-hp" id="eliHp" style="width:100%"></div></div></div>
-            <div class="mini-bar-wrap"><span class="mini-bar-label">FD</span><div class="mini-bar-bg"><div class="mini-bar-fill bar-hunger" id="eliFd" style="width:80%"></div></div></div>
-            <div class="mini-bar-wrap"><span class="mini-bar-label">MD</span><div class="mini-bar-bg"><div class="mini-bar-fill bar-mood" id="eliMd" style="width:85%"></div></div></div>
-          </div>
+      </div>
+      <div class="hud-char">
+        <div class="hud-name" id="en"><span class="name">ELI</span><span class="role">builder</span></div>
+        <div class="bars">
+          <div class="bar-row"><span class="bar-lbl">HP</span><div class="bar-bg"><div class="bar-f b-hp" id="ehp" style="width:100%"></div></div></div>
+          <div class="bar-row"><span class="bar-lbl">FD</span><div class="bar-bg"><div class="bar-f b-fd" id="efd" style="width:80%"></div></div></div>
+          <div class="bar-row"><span class="bar-lbl">MD</span><div class="bar-bg"><div class="bar-f b-md" id="emd" style="width:85%"></div></div></div>
         </div>
       </div>
     </div>
-
-    <!-- Resources -->
-    <div id="resources">
-      <div class="res"><span class="res-icon">🍞</span><span class="res-val" id="rFood">8</span></div>
-      <div class="res"><span class="res-icon">💊</span><span class="res-val" id="rMeds">2</span></div>
-      <div class="res"><span class="res-icon">🔩</span><span class="res-val" id="rParts">5</span></div>
-      <div class="res"><span class="res-icon">🔋</span><span class="res-val" id="rFuel">3</span></div>
-    </div>
-
-    <div id="scene-space"></div>
-
-    <!-- Moral / day strip -->
-    <div id="moral-strip">
-      <span class="moral-label">MORAL</span>
-      <div class="moral-bar-outer"><div class="moral-bar-inner" id="moralBar" style="width:80%"></div></div>
-      <span class="day-label" id="dayLabel">DAY 1</span>
-    </div>
-
-    <!-- Log -->
-    <div id="log">
-      <div class="log-line">The shelter holds. For now.</div>
-      <div class="log-line new">Mara watches the street. Eli checks the boards.</div>
-    </div>
-
-    <!-- Actions -->
-    <div id="actions">
-      <button class="act-btn" onclick="feedBoth()">🍞 Feed both<span class="cost">−2 food</span></button>
-      <button class="act-btn" onclick="healChar('mara')">💊 Treat Mara<span class="cost">−1 meds</span></button>
-      <button class="act-btn" onclick="healChar('eli')">💊 Treat Eli<span class="cost">−1 meds</span></button>
-      <button class="act-btn" onclick="buildShelter()">🔩 Fortify (Eli)<span class="cost">−2 parts</span></button>
-      <button class="act-btn wide night-btn" id="phaseBtn" onclick="phaseAction()">▸ SEND MARA TO SCAVENGE</button>
-    </div>
   </div>
 
-  <!-- Event modal -->
-  <div id="modal">
-    <div id="modal-inner">
-      <canvas id="modal-scene" width="392" height="120"></canvas>
-      <div id="modal-title"></div>
-      <div id="modal-text"></div>
-      <div id="modal-choices"></div>
-    </div>
+  <div id="res">
+    <div class="rv"><span class="ri">🍞</span><span class="rn" id="rf">8</span></div>
+    <div class="rv"><span class="ri">💊</span><span class="rn" id="rm">2</span></div>
+    <div class="rv"><span class="ri">🔩</span><span class="rn" id="rp">5</span></div>
+    <div class="rv"><span class="ri">🔋</span><span class="rn" id="ru">3</span></div>
+    <div class="rv"><span class="ri">🏚</span><span class="rn" id="rs">Lv1</span></div>
   </div>
 
-  <!-- Game over -->
-  <div id="gameover">
-    <h2>THEY'RE GONE</h2>
-    <div class="go-stats" id="goStats"></div>
-    <button id="replay-btn" onclick="resetGame()">PLAY AGAIN</button>
+  <div id="gap"></div>
+
+  <div id="mbar">
+    <span class="ml" id="mw">DECENT</span>
+    <div class="mo"><div class="mi" id="mb" style="width:80%"></div></div>
+    <span class="dl" id="dl">DAY 1</span>
+  </div>
+
+  <div id="log">
+    <div class="ll">The shelter holds. For now.</div>
+    <div class="ll hi">Mara watches the street. Eli checks the boards.</div>
+  </div>
+
+  <div id="act">
+    <div class="btn-row">
+      <button class="ab" onclick="feedBoth()">🍞 Feed both<span class="c">−2 food</span></button>
+      <button class="ab" onclick="heal('mara')">💊 Treat Mara<span class="c">−1 meds</span></button>
+    </div>
+    <div class="btn-row">
+      <button class="ab" onclick="heal('eli')">💊 Treat Eli<span class="c">−1 meds</span></button>
+      <button class="ab" onclick="build()">🔩 Fortify (Eli)<span class="c">−2 parts</span></button>
+    </div>
+    <button class="ab full blue" id="sleepBtn" onclick="doRest()">💤 Both rest<span class="c">+mood · costs time</span></button>
+    <button class="ab full purple" id="phaseBtn" onclick="openPicker()">▸ SEND OUT TO SCAVENGE</button>
   </div>
 </div>
 
+<!-- Location picker -->
+<div id="picker">
+  <div id="picker-inner">
+    <div class="pick-title">WHO GOES?</div>
+    <div class="pick-who">
+      <button class="who-btn" id="whoMara" onclick="setWho('mara')">MARA</button>
+      <button class="who-btn" id="whoEli" onclick="setWho('eli')">ELI</button>
+      <button class="who-btn" id="whoBoth" onclick="setWho('both')">BOTH</button>
+    </div>
+    <div class="pick-title" style="margin-top:4px">WHERE?</div>
+    <div class="loc-grid">
+      <button class="loc-btn" id="locA" onclick="setLoc('apartment')">
+        <span>Abandoned Apartment<br><span style="font-size:9px;color:#556">food · low meds · safe</span></span>
+        <span class="loc-risk low">LOW RISK</span>
+      </button>
+      <button class="loc-btn" id="locH" onclick="setLoc('hardware')">
+        <span>Hardware Store<br><span style="font-size:9px;color:#556">parts · fuel · sometimes occupied</span></span>
+        <span class="loc-risk med">MED RISK</span>
+      </button>
+      <button class="loc-btn" id="locM" onclick="setLoc('clinic')">
+        <span>Medical Clinic<br><span style="font-size:9px;color:#556">meds · meds · often dangerous</span></span>
+        <span class="loc-risk">HIGH RISK</span>
+      </button>
+    </div>
+    <button class="confirm-btn" id="goBtn" onclick="confirmScavenge()" disabled>▸ CONFIRM</button>
+  </div>
+</div>
+
+<!-- Event modal -->
+<div id="modal">
+  <div id="mi">
+    <canvas id="ms" width="394" height="110"></canvas>
+    <div id="mt"></div>
+    <div id="mx"></div>
+    <div id="mc"></div>
+  </div>
+</div>
+
+<!-- Game over -->
+<div id="go">
+  <h2>THEY'RE GONE</h2>
+  <div class="gs" id="gs"></div>
+  <button id="rp" onclick="reset()">PLAY AGAIN</button>
+</div>
+
 <script>
-// ─── State ─────────────────────────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────────────────
 const S = {
   day: 1, phase: 'day', moral: 80,
-  food: 8, meds: 2, parts: 5, fuel: 3,
-  shelter: 1,
-  mara: { hp: 100, food: 80, mood: 90, alive: true },
-  eli:  { hp: 100, food: 80, mood: 85, alive: true },
+  food: 8, meds: 2, parts: 5, fuel: 3, shelter: 1,
+  mara: { hp: 100, fd: 80, md: 90, alive: true },
+  eli:  { hp: 100, fd: 80, md: 85, alive: true },
 };
-let usedEvents = [], eventQueue = [], time = 0;
+let usedEvt = [], evtQ = [], T = 0;
+let pickerWho = null, pickerLoc = null;
+let scavX = -60, maraWalk = 0, eliWalk = 0;
+let nightFade = 0; // 0=day, 1=night (smooth transition)
 
-// ─── BG Canvas ─────────────────────────────────────────────────────────────
-const bgCanvas = document.getElementById('bg');
-const bgCtx = bgCanvas.getContext('2d');
+// ── Canvas setup ─────────────────────────────────────────────────────────
+const cv = document.getElementById('bg');
+const cx = cv.getContext('2d');
 const W = 420, H = 820;
-bgCanvas.width = W; bgCanvas.height = H;
+cv.width = W; cv.height = H;
 
-// Rain particles
-const rain = Array.from({length: 120}, () => ({
-  x: Math.random() * W,
-  y: Math.random() * H,
-  len: 8 + Math.random() * 14,
-  speed: 6 + Math.random() * 8,
-  alpha: 0.15 + Math.random() * 0.3,
+// Procedural world elements (generated once)
+const BLD_FAR = Array.from({length: 14}, (_, i) => ({
+  x: i * 34 - 10 + (i%3)*8,
+  w: 22 + (i*7)%30,
+  h: 60 + (i*13)%200,
+  wins: Array.from({length:10}, (__, j) => ({
+    ox: ((j*37)%100)/100, oy: ((j*53)%100)/100,
+    lit: Math.random() > 0.55
+  }))
+}));
+const BLD_MID = Array.from({length: 7}, (_, i) => ({
+  x: i * 65 - 5, w: 42 + (i*11)%28, h: 50 + (i*19)%90,
+  wins: Array.from({length:6}, (__, j) => ({ ox: ((j*41)%100)/100, oy: ((j*67)%100)/100, lit: Math.random() > 0.5 }))
+}));
+const BLD_FG = [
+  { x: -10, w: 90, h: 75 }, { x: 120, w: 55, h: 60 },
+  { x: 250, w: 70, h: 90 }, { x: 340, w: 80, h: 65 }, { x: 380, w: 50, h: 110 },
+];
+const RAIN = Array.from({length:140}, () => ({
+  x: Math.random()*W, y: Math.random()*H,
+  len: 9+Math.random()*14, spd: 7+Math.random()*9, a: 0.12+Math.random()*0.28,
 }));
 
-// Building silhouettes (procedural)
-const bgBuildings = Array.from({length: 12}, (_, i) => ({
-  x: (i / 12) * W * 1.3 - 20,
-  w: 28 + Math.random() * 40,
-  h: 80 + Math.random() * 200,
-  windows: Array.from({length: 8}, () => ({ lit: Math.random() > 0.6, x: Math.random(), y: Math.random() })),
-}));
-const fgBuildings = Array.from({length: 6}, (_, i) => ({
-  x: (i / 6) * W * 1.1 - 10,
-  w: 40 + Math.random() * 60,
-  h: 60 + Math.random() * 100,
-}));
+const GY = Math.round(H * 0.71); // ground Y
 
-// Character animation state
-let maraX = 95, eliX = 195;
-let maraWalk = 0, eliWalk = 0;
-let scavengeX = -40; // mara walking off screen at night
-let nightProgress = 0; // 0..1 transition
+function drawBg(t) {
+  const dt = t - (drawBg._lt || t); drawBg._lt = t; T += dt * 0.001;
+  const nf = nightFade; // 0=day, 1=night
 
-// Window flicker timer
-let flickTimer = 0;
-
-function drawScene(t) {
-  const isNight = S.phase === 'night';
-  const dt = t - (drawScene._last || t);
-  drawScene._last = t;
-  time += dt * 0.001;
-
-  // Sky gradient
-  const sky = bgCtx.createLinearGradient(0, 0, 0, H);
-  if (isNight) {
-    sky.addColorStop(0, '#010510');
-    sky.addColorStop(0.5, '#060c1e');
-    sky.addColorStop(1, '#0a0f20');
-  } else {
-    sky.addColorStop(0, '#050c1e');
-    sky.addColorStop(0.5, '#0d1830');
-    sky.addColorStop(1, '#111c35');
-  }
-  bgCtx.fillStyle = sky;
-  bgCtx.fillRect(0, 0, W, H);
-
-  // Moon / glow
-  if (isNight) {
-    const moonX = W * 0.75, moonY = 60;
-    const moonGlow = bgCtx.createRadialGradient(moonX, moonY, 0, moonX, moonY, 80);
-    moonGlow.addColorStop(0, 'rgba(200,220,255,0.18)');
-    moonGlow.addColorStop(1, 'transparent');
-    bgCtx.fillStyle = moonGlow;
-    bgCtx.fillRect(0, 0, W, H);
-    bgCtx.beginPath();
-    bgCtx.arc(moonX, moonY, 18, 0, Math.PI * 2);
-    bgCtx.fillStyle = 'rgba(220,230,255,0.85)';
-    bgCtx.fill();
-  } else {
-    // Dim amber glow (candle through window)
-    const glow = bgCtx.createRadialGradient(W * 0.3, H * 0.55, 0, W * 0.3, H * 0.55, 120);
-    glow.addColorStop(0, 'rgba(200,140,50,0.12)');
-    glow.addColorStop(1, 'transparent');
-    bgCtx.fillStyle = glow;
-    bgCtx.fillRect(0, 0, W, H);
-  }
-
-  // Stars (night only)
-  if (isNight) {
-    bgCtx.fillStyle = 'rgba(200,220,255,0.7)';
-    for (let i = 0; i < 40; i++) {
-      const sx = ((i * 137.5) % 1) * W;
-      const sy = ((i * 97.3) % 0.35) * H;
-      const blink = Math.sin(time * 2 + i) * 0.5 + 0.5;
-      bgCtx.globalAlpha = blink * 0.7;
-      bgCtx.fillRect(sx, sy, 1, 1);
-    }
-    bgCtx.globalAlpha = 1;
-  }
-
-  // Far buildings (silhouettes)
-  const groundY = H * 0.72;
-  bgBuildings.forEach(b => {
-    const by = groundY - b.h;
-    bgCtx.fillStyle = isNight ? '#05080f' : '#06090e';
-    bgCtx.fillRect(b.x, by, b.w, b.h);
-    // Windows
-    b.windows.forEach((w, wi) => {
-      if (!w.lit) return;
-      const wx = b.x + 4 + w.x * (b.w - 10);
-      const wy = by + 8 + w.y * (b.h - 20);
-      const flick = Math.sin(time * 3 + wi * 7) > 0.97 ? 0 : 1;
-      bgCtx.fillStyle = isNight
-        ? `rgba(255,220,120,${0.5 * flick})`
-        : `rgba(255,200,80,${0.2 * flick})`;
-      bgCtx.fillRect(wx, wy, 5, 7);
-    });
-  });
+  // Sky
+  const sk = cx.createLinearGradient(0, 0, 0, GY);
+  const dc1 = lerp3([6,14,40], [2,5,18], nf);
+  const dc2 = lerp3([14,26,58], [8,12,28], nf);
+  sk.addColorStop(0, rgb(dc1));
+  sk.addColorStop(1, rgb(dc2));
+  cx.fillStyle = sk; cx.fillRect(0, 0, W, GY);
 
   // Ground
-  bgCtx.fillStyle = isNight ? '#04060c' : '#060910';
-  bgCtx.fillRect(0, groundY, W, H - groundY);
+  cx.fillStyle = rgb(lerp3([8,10,18],[4,5,10],nf));
+  cx.fillRect(0, GY, W, H - GY);
 
-  // Ground line detail
-  bgCtx.strokeStyle = 'rgba(74,158,255,0.08)';
-  bgCtx.lineWidth = 1;
-  bgCtx.beginPath();
-  bgCtx.moveTo(0, groundY);
-  bgCtx.lineTo(W, groundY);
-  bgCtx.stroke();
-
-  // Foreground buildings (pure black)
-  fgBuildings.forEach(b => {
-    bgCtx.fillStyle = '#010204';
-    bgCtx.fillRect(b.x, groundY - b.h, b.w, b.h);
-  });
-
-  // Shelter (day view: interior wall / night: exterior)
-  if (!isNight) {
-    drawShelterInterior(groundY);
-  } else {
-    drawShelterExterior(groundY);
+  // Moon (night)
+  if (nf > 0.1) {
+    const ma = nf * 0.9;
+    const mg = cx.createRadialGradient(W*0.76,52,0,W*0.76,52,70);
+    mg.addColorStop(0, `rgba(200,220,255,${0.15*ma})`);
+    mg.addColorStop(1, 'transparent');
+    cx.fillStyle = mg; cx.fillRect(0,0,W,H);
+    cx.globalAlpha = ma * 0.88;
+    cx.beginPath(); cx.arc(W*0.76, 52, 17, 0, Math.PI*2);
+    cx.fillStyle = 'rgba(220,230,255,0.9)'; cx.fill();
+    cx.globalAlpha = 1;
   }
 
-  // Rain (night)
-  if (isNight) {
-    bgCtx.strokeStyle = 'rgba(120,160,240,0.22)';
-    bgCtx.lineWidth = 1;
-    rain.forEach(r => {
-      r.y += r.speed;
-      r.x -= 1.5;
-      if (r.y > H) { r.y = -r.len; r.x = Math.random() * W; }
-      bgCtx.globalAlpha = r.alpha;
-      bgCtx.beginPath();
-      bgCtx.moveTo(r.x, r.y);
-      bgCtx.lineTo(r.x - 2, r.y + r.len);
-      bgCtx.stroke();
+  // Sun glow (day)
+  if (nf < 0.9) {
+    const sa = (1-nf) * 0.7;
+    const sg = cx.createRadialGradient(W*0.25, 80, 0, W*0.25, 80, 100);
+    sg.addColorStop(0, `rgba(240,180,80,${0.12*sa})`);
+    sg.addColorStop(1, 'transparent');
+    cx.fillStyle = sg; cx.fillRect(0,0,W,H);
+  }
+
+  // Stars (night)
+  if (nf > 0.3) {
+    cx.fillStyle = 'rgba(210,225,255,0.8)';
+    for (let i = 0; i < 45; i++) {
+      const sx = ((i*137.5)%1)*W, sy = ((i*97.3)%0.38)*GY;
+      cx.globalAlpha = nf * (Math.sin(T*1.5+i)*0.3+0.7) * 0.8;
+      cx.fillRect(sx, sy, 1, 1);
+    }
+    cx.globalAlpha = 1;
+  }
+
+  // Far buildings
+  BLD_FAR.forEach(b => {
+    const by = GY - b.h;
+    cx.fillStyle = rgb(lerp3([7,9,14],[3,4,7],nf));
+    cx.fillRect(b.x, by, b.w, b.h);
+    b.wins.forEach((w,wi) => {
+      if (!w.lit) return;
+      const flk = Math.sin(T*2.5+wi*7) > 0.96 ? 0 : 1;
+      const al = nf > 0.5 ? 0.55 : 0.2;
+      cx.fillStyle = `rgba(255,215,100,${al*flk})`;
+      cx.fillRect(b.x + 3 + w.ox*(b.w-8), by + 6 + w.oy*(b.h-18), 5, 7);
     });
-    bgCtx.globalAlpha = 1;
-    bgCtx.lineWidth = 1;
+  });
+
+  // Mid buildings
+  BLD_MID.forEach(b => {
+    const by = GY - b.h;
+    cx.fillStyle = rgb(lerp3([5,7,11],[2,3,5],nf));
+    cx.fillRect(b.x, by, b.w, b.h);
+    b.wins.forEach((w,wi) => {
+      if (!w.lit) return;
+      const al = nf > 0.5 ? 0.6 : 0.22;
+      const flk = Math.sin(T*3+wi*11) > 0.95 ? 0 : 1;
+      cx.fillStyle = `rgba(255,200,80,${al*flk})`;
+      cx.fillRect(b.x + 4 + w.ox*(b.w-10), by + 5 + w.oy*(b.h-16), 6, 8);
+    });
+  });
+
+  // Shelter + scene
+  if (S.phase === 'day' && nightFade < 0.5) drawShelterInterior();
+  else drawShelterExterior();
+
+  // Foreground silhouettes
+  BLD_FG.forEach(b => {
+    cx.fillStyle = rgb(lerp3([3,3,5],[1,2,4],nf));
+    cx.fillRect(b.x, GY - b.h, b.w, b.h);
+  });
+
+  // Ground line
+  cx.strokeStyle = `rgba(74,158,255,${0.06 + nf*0.04})`;
+  cx.lineWidth = 1;
+  cx.beginPath(); cx.moveTo(0,GY); cx.lineTo(W,GY); cx.stroke();
+
+  // Rain (night)
+  if (nf > 0.15) {
+    cx.lineWidth = 1;
+    RAIN.forEach(r => {
+      r.y += r.spd; r.x -= 1.8;
+      if (r.y > H) { r.y = -r.len; r.x = Math.random()*W; }
+      cx.strokeStyle = `rgba(120,160,240,${r.a * nf})`;
+      cx.beginPath(); cx.moveTo(r.x,r.y); cx.lineTo(r.x-2,r.y+r.len); cx.stroke();
+    });
+    cx.lineWidth = 1;
+    // Puddles
+    cx.fillStyle = `rgba(74,158,255,${0.04*nf})`;
+    [80,220,330].forEach((px,i) => cx.fillRect(px, GY+1+i, 45+i*10, 3));
   }
 
   // Characters
+  drawChars();
+
+  // Night fade
+  if (S.phase === 'night' && nightFade < 1) nightFade = Math.min(1, nightFade + 0.008);
+  if (S.phase === 'day'  && nightFade > 0) nightFade = Math.max(0, nightFade - 0.012);
+}
+
+function drawShelterInterior() {
+  cx.fillStyle = '#08090e';
+  cx.fillRect(22, GY-155, W-44, 155);
+  // Wood plank lines
+  cx.strokeStyle = '#0c0e14'; cx.lineWidth = 2;
+  for (let i = 1; i < 6; i++) { cx.beginPath(); cx.moveTo(22, GY-155+i*26); cx.lineTo(W-22, GY-155+i*26); cx.stroke(); }
+  // Vertical walls
+  cx.fillStyle = '#060710'; cx.fillRect(22, GY-155, 5, 155); cx.fillRect(W-27, GY-155, 5, 155);
+  // Window
+  const wflk = Math.sin(T*6)*0.15+0.85;
+  cx.fillStyle = `rgba(5,12,28,0.95)`;
+  cx.fillRect(W-82, GY-128, 40, 46);
+  cx.strokeStyle = '#151c2e'; cx.lineWidth = 1.5;
+  cx.strokeRect(W-82, GY-128, 40, 46);
+  cx.strokeStyle = '#0d1322';
+  cx.beginPath(); cx.moveTo(W-62, GY-128); cx.lineTo(W-62, GY-82); cx.stroke();
+  cx.beginPath(); cx.moveTo(W-82, GY-105); cx.lineTo(W-42, GY-105); cx.stroke();
+  // Candle
+  const cy2 = GY - 28, cg = cx.createRadialGradient(150, cy2, 0, 150, cy2, 50);
+  cg.addColorStop(0, `rgba(255,170,50,${0.38*wflk})`);
+  cg.addColorStop(1, 'transparent');
+  cx.fillStyle = cg; cx.fillRect(100, cy2-50, 100, 50);
+  cx.fillStyle = '#b8924e'; cx.fillRect(148, cy2-12, 4, 14);
+  cx.fillStyle = `rgba(255,200,60,${wflk})`;
+  cx.beginPath(); cx.ellipse(150, cy2-14, 3, 5+Math.sin(T*8)*0.8, 0, 0, Math.PI*2); cx.fill();
+}
+
+function drawShelterExterior() {
+  cx.fillStyle = '#03040a';
+  cx.fillRect(12, GY-175, 100, 175);
+  // boards
+  cx.strokeStyle = '#080b14'; cx.lineWidth = 2;
+  for (let i = 1; i < 6; i++) { cx.beginPath(); cx.moveTo(12, GY-175+i*28); cx.lineTo(112, GY-175+i*28); cx.stroke(); }
+  // door
+  cx.fillStyle = '#020307'; cx.fillRect(38, GY-68, 32, 68);
+  cx.strokeStyle = '#0c0f18'; cx.lineWidth = 1; cx.strokeRect(38, GY-68, 32, 68);
+  // lit window
+  const lf = Math.sin(T*5)*0.12+0.88;
+  cx.fillStyle = `rgba(200,140,50,${0.45*lf})`;
+  cx.fillRect(76, GY-130, 26, 30);
+  const wg = cx.createRadialGradient(89, GY-115, 0, 89, GY-115, 32);
+  wg.addColorStop(0, `rgba(200,140,50,${0.22*lf})`); wg.addColorStop(1,'transparent');
+  cx.fillStyle = wg; cx.fillRect(55, GY-147, 68, 64);
+}
+
+function drawChars() {
+  const isNight = S.phase === 'night';
+  const scaver = pickerWho; // who is out
   if (!isNight) {
-    drawCharacter(bgCtx, maraX, groundY - 2, maraWalk, S.mara.alive, '#c8a96e', false);
-    drawCharacter(bgCtx, eliX, groundY - 2, eliWalk * 0.4, S.eli.alive, '#4a9eff', true);
+    if (S.mara.alive) char(cx, 100, GY, maraWalk, '#c8a96e', 46);
+    if (S.eli.alive)  char(cx, 200, GY, eliWalk*0.5, '#4a9eff', 52);
+    maraWalk += 0.025; eliWalk += 0.025;
   } else {
-    // Mara walking off screen
-    scavengeX += 0.4;
-    if (scavengeX > W + 40) scavengeX = W * 0.6;
-    maraWalk += 0.12;
-    drawCharacter(bgCtx, scavengeX, groundY - 2, maraWalk, S.mara.alive, '#c8a96e', false);
-    if (S.eli.alive) {
-      // Eli in shelter window
-      drawCharacterSmall(bgCtx, 60, groundY - 48, S.eli.alive);
+    // Scavenging character walks across
+    if (scaver !== 'eli' && S.mara.alive) {
+      scavX += 0.5; if (scavX > W+60) scavX = -60;
+      maraWalk += 0.14;
+      char(cx, scavX, GY, maraWalk, '#c8a96e', 46);
     }
-  }
-
-  // Idle sway
-  maraWalk += 0.02;
-  eliWalk += 0.02;
-
-  // Puddle reflections (night)
-  if (isNight) {
-    bgCtx.fillStyle = 'rgba(74,158,255,0.04)';
-    bgCtx.fillRect(80, groundY + 2, 60, 4);
-    bgCtx.fillRect(240, groundY + 3, 45, 3);
-    bgCtx.fillRect(330, groundY + 1, 30, 4);
-  }
-
-  // Amber lamp post glow (day)
-  if (!isNight) {
-    const lampX = W * 0.55;
-    const lampY = groundY - 20;
-    const lampGlow = bgCtx.createRadialGradient(lampX, lampY, 0, lampX, lampY, 60);
-    lampGlow.addColorStop(0, 'rgba(200,140,50,0.09)');
-    lampGlow.addColorStop(1, 'transparent');
-    bgCtx.fillStyle = lampGlow;
-    bgCtx.fillRect(lampX - 60, lampY - 60, 120, 80);
-  }
-}
-
-function drawShelterInterior(gy) {
-  // Floor
-  bgCtx.fillStyle = '#0a0c12';
-  bgCtx.fillRect(20, gy - 160, W - 40, 160);
-  // Walls
-  bgCtx.fillStyle = '#070810';
-  bgCtx.fillRect(20, gy - 160, 6, 160);
-  bgCtx.fillRect(W - 26, gy - 160, 6, 160);
-  // Ceiling
-  bgCtx.fillStyle = '#050608';
-  bgCtx.fillRect(20, gy - 162, W - 40, 8);
-  // Window cutout (right wall)
-  const winX = W - 80, winY = gy - 130, winW = 40, winH = 50;
-  bgCtx.fillStyle = 'rgba(5,10,25,0.9)';
-  bgCtx.fillRect(winX, winY, winW, winH);
-  bgCtx.strokeStyle = '#1a2030';
-  bgCtx.lineWidth = 2;
-  bgCtx.strokeRect(winX, winY, winW, winH);
-  // Cross on window
-  bgCtx.strokeStyle = '#0f1520';
-  bgCtx.beginPath();
-  bgCtx.moveTo(winX + winW/2, winY); bgCtx.lineTo(winX + winW/2, winY + winH);
-  bgCtx.moveTo(winX, winY + winH/2); bgCtx.lineTo(winX + winW, winY + winH/2);
-  bgCtx.stroke();
-  // Candle flicker
-  const cx = 155, cy = gy - 30;
-  const flicker = Math.sin(time * 8) * 0.3 + 0.7;
-  const candleGlow = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, 45);
-  candleGlow.addColorStop(0, `rgba(255,180,60,${0.35 * flicker})`);
-  candleGlow.addColorStop(1, 'transparent');
-  bgCtx.fillStyle = candleGlow;
-  bgCtx.fillRect(cx - 45, cy - 45, 90, 50);
-  bgCtx.fillStyle = '#c8a96e';
-  bgCtx.fillRect(cx - 2, cy - 10, 4, 12);
-  bgCtx.fillStyle = `rgba(255,200,60,${flicker})`;
-  bgCtx.beginPath();
-  bgCtx.ellipse(cx, cy - 13, 3, 5, 0, 0, Math.PI * 2);
-  bgCtx.fill();
-}
-
-function drawShelterExterior(gy) {
-  // Building face
-  bgCtx.fillStyle = '#03050a';
-  bgCtx.fillRect(10, gy - 180, 110, 180);
-  // Boards
-  bgCtx.strokeStyle = '#0c0f18';
-  bgCtx.lineWidth = 2;
-  for (let i = 0; i < 5; i++) {
-    bgCtx.beginPath();
-    bgCtx.moveTo(10, gy - 30 - i * 30);
-    bgCtx.lineTo(120, gy - 30 - i * 30);
-    bgCtx.stroke();
-  }
-  // Door
-  bgCtx.fillStyle = '#020408';
-  bgCtx.fillRect(40, gy - 70, 30, 70);
-  bgCtx.strokeStyle = '#0f1520';
-  bgCtx.lineWidth = 1;
-  bgCtx.strokeRect(40, gy - 70, 30, 70);
-  // Lit window
-  const winFlick = Math.sin(time * 6) * 0.15 + 0.85;
-  bgCtx.fillStyle = `rgba(200,140,50,${0.4 * winFlick})`;
-  bgCtx.fillRect(80, gy - 130, 24, 28);
-  // Window glow
-  const wg = bgCtx.createRadialGradient(92, gy - 116, 0, 92, gy - 116, 30);
-  wg.addColorStop(0, `rgba(200,140,50,${0.25 * winFlick})`);
-  wg.addColorStop(1, 'transparent');
-  bgCtx.fillStyle = wg;
-  bgCtx.fillRect(62, gy - 146, 60, 60);
-}
-
-function drawCharacter(ctx, x, y, walk, alive, tint, isTall) {
-  if (!alive) return;
-  const bob = Math.sin(walk * 2) * 1.5;
-  const h = isTall ? 52 : 46;
-  ctx.save();
-  ctx.translate(x, y + bob);
-  ctx.fillStyle = '#000';
-  ctx.shadowColor = tint;
-  ctx.shadowBlur = 8;
-  // Body
-  ctx.fillRect(-6, -h, 12, h * 0.45);
-  // Head
-  ctx.beginPath();
-  ctx.arc(0, -h - 8, 8, 0, Math.PI * 2);
-  ctx.fill();
-  // Legs
-  const legSwing = Math.sin(walk * 2) * 8;
-  ctx.beginPath();
-  ctx.moveTo(-3, -h * 0.55);
-  ctx.lineTo(-3 + legSwing, -h * 0.05);
-  ctx.lineTo(-5 + legSwing, 0);
-  ctx.stroke && ctx.stroke();
-  ctx.fillStyle = '#000';
-  ctx.fillRect(-7 + legSwing * 0.5, -h * 0.3, 5, h * 0.4);
-  ctx.fillRect(2 - legSwing * 0.5, -h * 0.3, 5, h * 0.4);
-  // Arms
-  ctx.fillRect(-10, -h + 4, 4, h * 0.28);
-  ctx.fillRect(6, -h + 4, 4, h * 0.28);
-  ctx.shadowBlur = 0;
-  ctx.restore();
-}
-
-function drawCharacterSmall(ctx, x, y, alive) {
-  if (!alive) return;
-  const bob = Math.sin(time * 2) * 1;
-  ctx.save();
-  ctx.translate(x, y + bob);
-  ctx.fillStyle = '#000';
-  ctx.shadowColor = '#4a9eff';
-  ctx.shadowBlur = 6;
-  ctx.beginPath();
-  ctx.arc(0, -20, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillRect(-4, -15, 8, 12);
-  ctx.shadowBlur = 0;
-  ctx.restore();
-}
-
-// ─── Modal scene drawings ─────────────────────────────────────────────────
-function drawEventScene(canvasEl, eventId) {
-  const ctx = canvasEl.getContext('2d');
-  const w = canvasEl.width, h = canvasEl.height;
-  ctx.fillStyle = '#030508';
-  ctx.fillRect(0, 0, w, h);
-  const t2 = time;
-
-  const ground = h * 0.78;
-  // Sky strip
-  const sky = ctx.createLinearGradient(0, 0, 0, ground);
-  sky.addColorStop(0, '#020510');
-  sky.addColorStop(1, '#05091a');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, ground);
-  ctx.fillStyle = '#020305';
-  ctx.fillRect(0, ground, w, h - ground);
-
-  if (eventId === 'stranger') {
-    // Doorway + two figures outside
-    // Door
-    ctx.fillStyle = '#01020a';
-    ctx.fillRect(w * 0.42, h * 0.25, w * 0.16, h * 0.53);
-    ctx.strokeStyle = '#0f1520';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(w * 0.42, h * 0.25, w * 0.16, h * 0.53);
-    // Amber glow from inside
-    const glow = ctx.createRadialGradient(w*0.5, h*0.5, 0, w*0.5, h*0.5, 50);
-    glow.addColorStop(0, 'rgba(200,140,50,0.35)');
-    glow.addColorStop(1, 'transparent');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, w, h);
-    // Woman silhouette
-    ctx.fillStyle = '#000'; ctx.shadowColor = '#c8a96e'; ctx.shadowBlur = 4;
-    ctx.beginPath(); ctx.arc(w*0.3, ground - 55, 7, 0, Math.PI*2); ctx.fill();
-    ctx.fillRect(w*0.3 - 5, ground - 48, 10, 26);
-    ctx.fillRect(w*0.3 - 4, ground - 22, 4, 22);
-    ctx.fillRect(w*0.3 + 1, ground - 22, 4, 22);
-    // Child
-    ctx.beginPath(); ctx.arc(w*0.22, ground - 36, 5, 0, Math.PI*2); ctx.fill();
-    ctx.fillRect(w*0.22 - 3, ground - 31, 7, 18);
-    ctx.fillRect(w*0.22 - 3, ground - 13, 3, 13);
-    ctx.fillRect(w*0.22 + 1, ground - 13, 3, 13);
-    ctx.shadowBlur = 0;
-    // Rain
-    ctx.strokeStyle = 'rgba(120,160,240,0.3)'; ctx.lineWidth = 1;
-    for (let i = 0; i < 18; i++) {
-      const rx = (i * 23 + t2 * 30) % w;
-      const ry = (i * 37 + t2 * 50) % ground;
-      ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx - 1, ry + 7); ctx.stroke();
+    if (scaver === 'eli' && S.eli.alive) {
+      scavX += 0.4; if (scavX > W+60) scavX = -60;
+      eliWalk += 0.12;
+      char(cx, scavX, GY, eliWalk, '#4a9eff', 52);
     }
-  } else if (eventId === 'cache') {
-    // Store shelves, family huddled
-    ctx.fillStyle = '#010208';
-    ctx.fillRect(w*0.1, h*0.15, w*0.8, h*0.6);
-    // Shelf lines
-    ctx.strokeStyle = '#08101e'; ctx.lineWidth = 2;
-    for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(w*0.1, h*(0.15 + i*0.15)); ctx.lineTo(w*0.9, h*(0.15 + i*0.15)); ctx.stroke(); }
-    // Family: 3 figures crouched
-    const fY = ground - 10;
-    [w*0.6, w*0.7, w*0.78].forEach((fx, fi) => {
-      const sz = fi === 1 ? 5 : 7;
-      ctx.fillStyle = '#000'; ctx.shadowColor = '#4a9eff'; ctx.shadowBlur = 3;
-      ctx.beginPath(); ctx.arc(fx, fY - sz*3, sz, 0, Math.PI*2); ctx.fill();
-      ctx.fillRect(fx - sz * 0.6, fY - sz*2.5, sz*1.2, sz*2.2);
-      ctx.shadowBlur = 0;
-    });
-    // Mara looking in (left)
-    ctx.fillStyle = '#000'; ctx.shadowColor = '#c8a96e'; ctx.shadowBlur = 5;
-    ctx.beginPath(); ctx.arc(w*0.2, fY - 42, 7, 0, Math.PI*2); ctx.fill();
-    ctx.fillRect(w*0.2 - 5, fY - 35, 10, 26);
-    ctx.shadowBlur = 0;
-  } else if (eventId === 'raiders') {
-    // 3 armed silhouettes + arrows pointing at shelter
-    const raiders = [w*0.55, w*0.68, w*0.78];
-    raiders.forEach((rx, ri) => {
-      ctx.fillStyle = '#000'; ctx.shadowColor = '#e94560'; ctx.shadowBlur = 5;
-      ctx.beginPath(); ctx.arc(rx, ground - 50, 7, 0, Math.PI*2); ctx.fill();
-      ctx.fillRect(rx - 5, ground - 43, 10, 24);
-      // Gun shape
-      ctx.fillRect(rx - 14, ground - 36, 14, 3);
-      ctx.fillRect(rx - 8, ground - 36, 3, 6);
-      ctx.shadowBlur = 0;
-    });
-    // Shelter
-    ctx.fillStyle = '#020308';
-    ctx.fillRect(w*0.05, ground - 80, 80, 80);
-    ctx.strokeStyle = '#c8a96e'; ctx.lineWidth = 1; ctx.globalAlpha = 0.3;
-    ctx.strokeRect(w*0.05, ground - 80, 80, 80);
-    ctx.globalAlpha = 1;
-  } else if (eventId === 'medicine') {
-    // Clinic shelves with cross
-    ctx.strokeStyle = '#1a3050'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(w*0.5, h*0.1); ctx.lineTo(w*0.5, h*0.5); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(w*0.35, h*0.25); ctx.lineTo(w*0.65, h*0.25); ctx.stroke();
-    ctx.strokeStyle = '#0a1830'; ctx.lineWidth = 1;
-    // Note on counter
-    ctx.fillStyle = '#0c1a2e';
-    ctx.fillRect(w*0.3, ground - 35, 60, 30);
-    ctx.fillStyle = '#c8a96e'; ctx.globalAlpha = 0.4;
-    ctx.font = '8px Courier New';
-    ctx.fillText('please leave', w*0.32, ground - 22);
-    ctx.fillText('some', w*0.38, ground - 12);
-    ctx.globalAlpha = 1;
-    // Meds bottles
-    [w*0.35, w*0.48, w*0.6].forEach(bx => {
-      ctx.fillStyle = '#000'; ctx.shadowColor = '#7ac74f'; ctx.shadowBlur = 4;
-      ctx.fillRect(bx, ground - 55, 8, 14);
-      ctx.shadowBlur = 0;
-    });
-  } else {
-    // Default: city night + Mara digging
-    ctx.fillStyle = '#000'; ctx.shadowColor = '#c8a96e'; ctx.shadowBlur = 8;
-    ctx.beginPath(); ctx.arc(w*0.5, ground - 55, 8, 0, Math.PI*2); ctx.fill();
-    ctx.fillRect(w*0.5 - 6, ground - 47, 12, 30);
-    // Shovel
-    ctx.fillRect(w*0.5 + 4, ground - 55, 3, 45);
-    ctx.fillRect(w*0.5 + 1, ground - 15, 8, 6);
-    ctx.shadowBlur = 0;
-    // X mark on ground
-    ctx.strokeStyle = '#c8a96e'; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(w*0.3 - 6, ground - 6); ctx.lineTo(w*0.3 + 6, ground + 6); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(w*0.3 + 6, ground - 6); ctx.lineTo(w*0.3 - 6, ground + 6); ctx.stroke();
-    ctx.globalAlpha = 1;
+    if (scaver === 'both') {
+      scavX += 0.45; if (scavX > W+60) scavX = -60;
+      maraWalk += 0.13; eliWalk += 0.13;
+      if (S.mara.alive) char(cx, scavX - 22, GY, maraWalk, '#c8a96e', 46);
+      if (S.eli.alive)  char(cx, scavX + 10, GY, eliWalk,  '#4a9eff', 52);
+    }
+    // Remaining character in shelter window
+    const home = scaver === 'mara' ? 'eli' : scaver === 'eli' ? 'mara' : null;
+    if (home && S[home].alive) charSmall(cx, 58, GY - 47);
   }
 }
 
-// ─── Animation loop ─────────────────────────────────────────────────────
-function loop(t) {
-  drawScene(t);
-  requestAnimationFrame(loop);
+function char(ctx, x, y, w, glow, h) {
+  const bob = Math.sin(w*2)*1.8;
+  const leg = Math.sin(w*2)*9;
+  ctx.save(); ctx.translate(x, y + bob);
+  ctx.fillStyle = '#000'; ctx.shadowColor = glow; ctx.shadowBlur = 10;
+  // torso
+  ctx.fillRect(-5, -h, 10, h*0.44);
+  // head
+  ctx.beginPath(); ctx.arc(0, -h-8, 7, 0, Math.PI*2); ctx.fill();
+  // legs
+  ctx.fillRect(-7+leg*0.6, -h*0.56, 5, h*0.42);
+  ctx.fillRect(2-leg*0.6, -h*0.56, 5, h*0.42);
+  // arms
+  ctx.fillRect(-11, -h+2, 4, h*0.28);
+  ctx.fillRect(7,   -h+2, 4, h*0.28);
+  ctx.shadowBlur = 0; ctx.restore();
 }
-requestAnimationFrame(loop);
+function charSmall(ctx, x, y) {
+  const b = Math.sin(T*1.8)*1;
+  ctx.save(); ctx.translate(x, y+b);
+  ctx.fillStyle = '#000'; ctx.shadowColor = '#4a9eff'; ctx.shadowBlur = 5;
+  ctx.beginPath(); ctx.arc(0,-16,5,0,Math.PI*2); ctx.fill();
+  ctx.fillRect(-4,-11,8,12); ctx.shadowBlur=0; ctx.restore();
+}
 
-// ─── UI helpers ─────────────────────────────────────────────────────────
-function setBar(id, pct) {
-  const el = document.getElementById(id);
-  if (el) el.style.width = Math.max(0, pct) + '%';
-}
-function setText(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = val;
-}
+// ── Helpers ───────────────────────────────────────────────────────────────
+function lerp3(a, b, t) { return a.map((v,i) => Math.round(v + (b[i]-v)*t)); }
+function rgb([r,g,b]) { return `rgb(${r},${g},${b})`; }
+function $(id) { return document.getElementById(id); }
+function set(id, v) { const e=$(id); if(e) e.textContent = v; }
+function bar(id, v) { const e=$(id); if(e) e.style.width = Math.max(0,Math.min(100,v))+'%'; }
 
 function updateUI() {
-  const m = S.mara, e = S.eli;
-  setBar('maraHp', m.hp); setBar('maraFd', m.food); setBar('maraMd', m.mood);
-  setBar('eliHp',  e.hp); setBar('eliFd',  e.food); setBar('eliMd',  e.mood);
-  setText('rFood', S.food); setText('rMeds', S.meds); setText('rParts', S.parts); setText('rFuel', S.fuel);
-  setText('dayLabel', 'DAY ' + S.day);
-  setBar('moralBar', S.moral);
-  document.getElementById('maraName').className = 'hud-name' + (m.alive ? '' : ' dead');
-  document.getElementById('eliName').className  = 'hud-name' + (e.alive ? '' : ' dead');
-  const btn = document.getElementById('phaseBtn');
+  bar('mhp', S.mara.hp); bar('mfd', S.mara.fd); bar('mmd', S.mara.md);
+  bar('ehp', S.eli.hp);  bar('efd', S.eli.fd);  bar('emd', S.eli.md);
+  set('rf', S.food); set('rm', S.meds); set('rp', S.parts); set('ru', S.fuel);
+  set('rs', 'Lv' + S.shelter);
+  set('dl', 'DAY ' + S.day);
+  bar('mb', S.moral);
+  set('mw', mword(S.moral));
+  $('mw').style.color = S.moral>=65?'#7ac74f':S.moral>=35?'#c8a96e':'#e94560';
+  $('mn').className = 'hud-name' + (S.mara.alive?'':' dead');
+  $('en').className = 'hud-name' + (S.eli.alive?'':' dead');
+  // Phase button
+  const pb = $('phaseBtn');
   if (S.phase === 'day') {
-    btn.textContent = '▸ SEND MARA TO SCAVENGE';
-    btn.className = 'act-btn wide night-btn';
+    pb.textContent = '▸ SEND OUT TO SCAVENGE';
+    pb.className = 'ab full purple';
   } else {
-    btn.textContent = '▸ RETURN — END NIGHT';
-    btn.className = 'act-btn wide';
+    pb.textContent = '▸ RETURN — END NIGHT';
+    pb.className = 'ab full blue';
+    pb.onclick = endNight;
   }
 }
 
-const logEl = document.getElementById('log');
-function log(msg, type = '') {
-  const prev = logEl.querySelector('.log-line.new');
-  if (prev) { prev.classList.remove('new'); }
-  const lines = logEl.querySelectorAll('.log-line');
+const logEl = $('log');
+function log(msg, cls='') {
+  const lines = logEl.querySelectorAll('.ll');
+  lines.forEach((l,i) => { if(i===lines.length-1) l.className='ll'; });
   if (lines.length >= 2) lines[0].remove();
   const d = document.createElement('div');
-  d.className = 'log-line new' + (type ? ' ' + type : '');
-  d.textContent = msg;
+  d.className = 'll hi' + (cls?' '+cls:''); d.textContent = msg;
   logEl.appendChild(d);
 }
 
-// ─── Actions ─────────────────────────────────────────────────────────────
+function mword(m) {
+  if (m>=85) return 'RIGHTEOUS';
+  if (m>=65) return 'DECENT';
+  if (m>=40) return 'COMPROMISED';
+  if (m>=20) return 'HARDENED';
+  return 'LOST';
+}
+
+// ── Day actions ───────────────────────────────────────────────────────────
 function feedBoth() {
-  if (S.food < 2) { log('Not enough food.', 'danger'); return; }
+  if (S.food<2) { log('Not enough food.','bad'); return; }
   S.food -= 2;
-  if (S.mara.alive) S.mara.food = Math.min(100, S.mara.food + 35);
-  if (S.eli.alive)  S.eli.food  = Math.min(100, S.eli.food  + 35);
-  log('Both eat. The hunger eases, briefly.', 'amber');
-  updateUI();
+  if (S.mara.alive) S.mara.fd = Math.min(100, S.mara.fd+35);
+  if (S.eli.alive)  S.eli.fd  = Math.min(100, S.eli.fd +35);
+  log('Both eat. The hunger fades briefly.','amb'); updateUI();
 }
-function healChar(c) {
-  if (!S[c].alive) { log('They\'re gone.', 'danger'); return; }
-  if (S.meds < 1) { log('No meds.', 'danger'); return; }
-  S.meds -= 1;
-  S[c].hp = Math.min(100, S[c].hp + 30);
-  log((c === 'mara' ? 'Mara' : 'Eli') + ' treated. Breathes easier.', 'good');
-  updateUI();
+function heal(c) {
+  if (!S[c].alive) { log('They\'re gone.','bad'); return; }
+  if (S.meds<1) { log('No meds.','bad'); return; }
+  S.meds -= 1; S[c].hp = Math.min(100, S[c].hp+30);
+  log((c==='mara'?'Mara':'Eli')+' treated.','good'); updateUI();
 }
-function buildShelter() {
-  if (!S.eli.alive) { log('Eli isn\'t here.', 'danger'); return; }
-  if (S.parts < 2) { log('Not enough parts.', 'danger'); return; }
-  S.parts -= 2;
-  S.shelter = Math.min(5, S.shelter + 1);
-  S.eli.mood = Math.min(100, S.eli.mood + 10);
-  log('Eli works through the night. The walls feel sturdier.', 'good');
-  updateUI();
+function build() {
+  if (!S.eli.alive) { log('Eli isn\'t here.','bad'); return; }
+  if (S.parts<2) { log('Not enough parts.','bad'); return; }
+  S.parts -= 2; S.shelter = Math.min(5, S.shelter+1);
+  S.eli.md = Math.min(100, S.eli.md+12);
+  log('Eli reinforces the walls. Shelter Lv'+S.shelter+'.','good'); updateUI();
+}
+function doRest() {
+  if (S.mara.alive) S.mara.md = Math.min(100, S.mara.md+18);
+  if (S.eli.alive)  S.eli.md  = Math.min(100, S.eli.md +18);
+  decay(); if (!checkDead()) updateUI();
 }
 
-// ─── Night events ────────────────────────────────────────────────────────
-const EVENTS = [
-  {
-    id: 'stranger', title: 'A KNOCK AT THE DOOR',
-    text: 'A woman and a child stand in the rain. Hollow eyes. They found you somehow. Letting them in means less food. Turning them away means—',
-    choices: [
-      { text: 'Let them in. Share what you have.', type: 'good', fn() { S.food = Math.max(0, S.food - 3); S.moral = Math.min(100, S.moral + 14); log('You move aside. The child stops crying.', 'good'); } },
-      { text: 'Turn them away. You can\'t afford this.', type: 'bad', fn() { S.moral = Math.max(0, S.moral - 20); S.eli.mood = Math.max(0, S.eli.mood - 22); log('Eli won\'t look at you. The door stays shut.', 'moral'); } },
-      { text: 'Give them one meal and point them east.', type: '', fn() { S.food = Math.max(0, S.food - 1); S.moral = Math.max(0, S.moral - 5); log('One meal. Maybe enough. Maybe not.', ''); } },
-    ]
-  },
-  {
-    id: 'cache', title: 'SOMEONE WAS HERE FIRST',
-    text: 'The hardware store wasn\'t empty. A family in the back corner, watching Mara\'s flashlight. They got there first.',
-    choices: [
-      { text: 'Take only what\'s clearly unclaimed.', type: 'good', fn() { S.parts += 2; S.moral = Math.min(100, S.moral + 6); log('Two cans of wire. You leave the good stuff.', 'good'); } },
-      { text: 'Take everything. You need it more.', type: 'bad', fn() { S.parts += 7; S.moral = Math.max(0, S.moral - 24); log('Mara clears the shelves. Nobody fights back. That\'s almost worse.', 'danger'); } },
-      { text: 'Offer food for parts.', type: '', fn() { if (S.food >= 2) { S.food -= 2; S.parts += 4; log('Fair trade. Nobody looks happy.', ''); } else log('Nothing to offer.', 'danger'); } },
-    ]
-  },
-  {
-    id: 'raiders', title: 'THREE IN THE STREET',
-    text: 'Armed figures circling the block. They haven\'t found the shelter. Your neighbors\' light is still on.',
-    choices: [
-      { text: 'Warn the neighbors quietly.', type: 'good', fn() { S.moral = Math.min(100, S.moral + 10); S.eli.mood = Math.min(100, S.eli.mood + 12); log('They get out in time. Eli exhales.', 'good'); } },
-      { text: 'Stay hidden. Don\'t risk it.', type: '', fn() { S.mara.hp = Math.max(0, S.mara.hp - 8); log('Mara stays low for two hours. Her back aches.', ''); } },
-      { text: 'Create a distraction — burn fuel.', type: '', fn() { S.fuel = Math.max(0, S.fuel - 2); S.food += 3; log('The fire pulls them. Mara moves through their drop.', 'good'); } },
-    ]
-  },
-  {
-    id: 'medicine', title: 'THE CLINIC',
-    text: 'An unlocked clinic. Meds still on the shelf. A handwritten note taped to the cabinet: "please leave some."',
-    choices: [
-      { text: 'Take half. Leave the antibiotics.', type: 'good', fn() { S.meds += 2; S.moral = Math.min(100, S.moral + 10); log('Two bottles. The note stays.', 'good'); } },
-      { text: 'Take it all.', type: 'bad', fn() { S.meds += 5; S.moral = Math.max(0, S.moral - 16); log('The note tears when you close the cabinet.', 'moral'); } },
-    ]
-  },
-  {
-    id: 'food_cache', title: 'BURIED IN THE PARK',
-    text: 'A marked cache near the old fountain. Enough food for a week. A child\'s drawing tied to the handle.',
-    choices: [
-      { text: 'Take it. Survival first.', type: 'bad', fn() { S.food += 7; S.moral = Math.max(0, S.moral - 12); log('Seven rations. The drawing goes back in the ground.', 'moral'); } },
-      { text: 'Take half. Leave the marker.', type: 'good', fn() { S.food += 3; S.moral = Math.min(100, S.moral + 6); log('Three rations. Someone else finds the rest.', 'good'); } },
-    ]
-  },
-];
+// ── Location picker ────────────────────────────────────────────────────────
+function openPicker() {
+  if (S.phase === 'night') return;
+  const aliveChars = [S.mara.alive && 'mara', S.eli.alive && 'eli'].filter(Boolean);
+  if (!aliveChars.length) return;
+  // reset
+  pickerWho = null; pickerLoc = null;
+  ['whoMara','whoEli','whoBoth','locA','locH','locM'].forEach(id => $(id) && $(id).classList.remove('sel'));
+  $('goBtn').disabled = true;
+  // disable unavailable who buttons
+  $('whoMara').disabled = !S.mara.alive;
+  $('whoEli').disabled  = !S.eli.alive;
+  $('whoBoth').disabled = !(S.mara.alive && S.eli.alive);
+  $('picker').classList.add('open');
+}
+function setWho(w) {
+  pickerWho = w;
+  ['whoMara','whoEli','whoBoth'].forEach(id => $(id).classList.remove('sel'));
+  const map = {mara:'whoMara',eli:'whoEli',both:'whoBoth'};
+  $(map[w]).classList.add('sel');
+  checkCanConfirm();
+}
+function setLoc(l) {
+  pickerLoc = l;
+  ['locA','locH','locM'].forEach(id => $(id).classList.remove('sel'));
+  const map = {apartment:'locA',hardware:'locH',clinic:'locM'};
+  $(map[l]).classList.add('sel');
+  checkCanConfirm();
+}
+function checkCanConfirm() {
+  $('goBtn').disabled = !(pickerWho && pickerLoc);
+}
+function confirmScavenge() {
+  $('picker').classList.remove('open');
+  startNight();
+}
 
-function phaseAction() {
-  if (S.phase === 'day') {
-    S.phase = 'night';
-    scavengeX = W * 0.4;
-    decayStats();
-    if (checkDeath()) return;
-    const pool = EVENTS.filter(e => !usedEvents.includes(e.id));
-    if (!pool.length) { usedEvents = []; }
-    const src = pool.length ? pool : EVENTS;
-    eventQueue = [...src].sort(() => Math.random() - 0.5).slice(0, 2);
-    log('— Night falls. Mara heads out. —', 'amber');
+// ── Night ─────────────────────────────────────────────────────────────────
+const EVENTS = {
+  apartment: [
+    { id:'stranger', title:'A KNOCK AT THE DOOR',
+      text:'A woman and child in the rain. Hollow eyes. They found you somehow.',
+      choices:[
+        {t:'Let them in.',cls:'g',fn(){S.food=Math.max(0,S.food-3);S.moral=Math.min(100,S.moral+14);log('You move aside. The child stops crying.','good');}},
+        {t:'Turn them away.',cls:'b',fn(){S.moral=Math.max(0,S.moral-20);S.eli.md=Math.max(0,S.eli.md-22);log('Eli won\'t look at you.','mor');}},
+        {t:'Give one meal and point east.',cls:'',fn(){S.food=Math.max(0,S.food-1);S.moral=Math.max(0,S.moral-4);log('One meal. Maybe enough.','');}},
+      ]},
+    { id:'food_find', title:'OLD PANTRY',
+      text:'A boarded-up apartment, untouched since the beginning. Food in the back.',
+      choices:[
+        {t:'Take it all.',cls:'',fn(){S.food+=6;log('Six rations. The apartment smells like someone left in a hurry.','amb');}},
+        {t:'Take half — leave a note.',cls:'g',fn(){S.food+=3;S.moral=Math.min(100,S.moral+5);log('Three rations. You leave the pen.','good');}},
+      ]},
+  ],
+  hardware: [
+    { id:'cache', title:'SOMEONE WAS HERE FIRST',
+      text:'Three people in the corner of the hardware store. They were here first.',
+      choices:[
+        {t:'Take only what\'s unclaimed.',cls:'g',fn(){S.parts+=2;S.moral=Math.min(100,S.moral+6);log('You leave the good stuff.','good');}},
+        {t:'Take everything.',cls:'b',fn(){S.parts+=8;S.moral=Math.max(0,S.moral-24);log('Nobody fights back. That\'s almost worse.','bad');}},
+        {t:'Offer food for parts.',cls:'',fn(){if(S.food>=2){S.food-=2;S.parts+=4;log('Fair trade.','');}else log('Nothing to offer.','bad');}},
+      ]},
+    { id:'raiders', title:'THREE IN THE STREET',
+      text:'Armed figures circling the block. Neighbors\' light is still on.',
+      choices:[
+        {t:'Warn the neighbors.',cls:'g',fn(){S.moral=Math.min(100,S.moral+10);log('They get out in time.','good');}},
+        {t:'Stay hidden.',cls:'',fn(){S.mara.hp=Math.max(0,S.mara.hp-8);log('Mara stays low for two hours. Her back aches.','');}},
+        {t:'Burn fuel as distraction.',cls:'',fn(){S.fuel=Math.max(0,S.fuel-2);S.food+=3;log('The fire pulls them away.','good');}},
+      ]},
+  ],
+  clinic: [
+    { id:'medicine', title:'THE CLINIC',
+      text:'Meds on the shelf. A note taped to the cabinet: "please leave some."',
+      choices:[
+        {t:'Take half. Leave the rest.',cls:'g',fn(){S.meds+=2;S.moral=Math.min(100,S.moral+10);log('Two bottles. The note stays.','good');}},
+        {t:'Take it all.',cls:'b',fn(){S.meds+=5;S.moral=Math.max(0,S.moral-16);log('The note tears when you close the cabinet.','bad');}},
+      ]},
+    { id:'wounded', title:'SOMEONE NEEDS HELP',
+      text:'A man collapsed in the clinic hallway. Still breathing. No supplies left.',
+      choices:[
+        {t:'Carry him outside — find help.',cls:'g',fn(){S.mara.hp=Math.max(0,S.mara.hp-5);S.moral=Math.min(100,S.moral+12);log('You lose an hour. His eyes open when you lay him down.','good');}},
+        {t:'Leave him. You can\'t carry this.',cls:'b',fn(){S.moral=Math.max(0,S.moral-14);log('You step over him. His breathing fades behind you.','bad');}},
+      ]},
+  ],
+};
+
+let nightEvts = [];
+function startNight() {
+  S.phase = 'night';
+  scavX = S.phase === 'night' ? W * 0.35 : -60;
+  decay();
+  if (checkDead()) return;
+  // Build event queue from chosen location
+  const pool = (EVENTS[pickerLoc] || []).filter(e => !usedEvt.includes(e.id));
+  if (!pool.length) { usedEvt = usedEvt.filter(id => !EVENTS[pickerLoc].map(e=>e.id).includes(id)); }
+  const src = pool.length ? pool : EVENTS[pickerLoc];
+  nightEvts = [...src].sort(()=>Math.random()-0.5).slice(0,2);
+  const who = pickerWho === 'both' ? 'Mara and Eli head out' : pickerWho === 'mara' ? 'Mara heads out' : 'Eli heads out';
+  log(`— Night falls. ${who}. —`, 'amb');
+  updateUI();
+  setTimeout(nextEvt, 800);
+}
+function nextEvt() {
+  if (!nightEvts.length) {
+    // Passive loot based on location
+    const lootMap = { apartment: ['food','food'], hardware: ['parts','fuel'], clinic: ['meds','meds'] };
+    const options = lootMap[pickerLoc] || ['food'];
+    const which = options[Math.floor(Math.random()*options.length)];
+    const amt = 1 + Math.floor(Math.random()*2);
+    S[which] = (S[which]||0) + amt;
+    log(`Found ${amt} ${which} heading back.`, 'good');
     updateUI();
-    setTimeout(nextEvent, 700);
-  } else {
-    endNight();
-  }
-}
-
-function nextEvent() {
-  if (!eventQueue.length) {
-    // Passive scavenge
-    if (Math.random() > 0.45) {
-      const types = ['food', 'meds', 'parts', 'fuel'];
-      const t = types[Math.floor(Math.random() * types.length)];
-      const amt = 1 + Math.floor(Math.random() * 2);
-      S[t] = (S[t] || 0) + amt;
-      log(`Mara finds ${amt} ${t} on the way back.`, 'good');
-      updateUI();
+    // Injury risk at clinic
+    if (pickerLoc === 'clinic' && Math.random() < 0.35) {
+      const who = pickerWho === 'eli' ? 'eli' : 'mara';
+      if (S[who].alive) { S[who].hp = Math.max(0, S[who].hp - 15); log('Came back injured.','bad'); updateUI(); }
     }
     return;
   }
-  const ev = eventQueue.shift();
-  usedEvents.push(ev.id);
-  showEvent(ev);
+  const ev = nightEvts.shift();
+  usedEvt.push(ev.id);
+  showEvt(ev);
 }
 
-function showEvent(ev) {
-  document.getElementById('modal-title').textContent = ev.title;
-  document.getElementById('modal-text').textContent = ev.text;
-  const ch = document.getElementById('modal-choices');
-  ch.innerHTML = '';
+function showEvt(ev) {
+  $('mt').textContent = ev.title;
+  $('mx').textContent = ev.text;
+  const ch = $('mc'); ch.innerHTML = '';
   ev.choices.forEach(c => {
-    const btn = document.createElement('button');
-    btn.className = 'choice' + (c.type === 'good' ? ' good' : c.type === 'bad' ? ' bad' : '');
-    btn.textContent = c.text;
-    btn.onclick = () => {
-      c.fn();
-      closeModal();
-      updateUI();
-      if (!checkDeath()) setTimeout(nextEvent, 400);
-    };
-    ch.appendChild(btn);
+    const b = document.createElement('button');
+    b.className = 'ch' + (c.cls?' '+c.cls:'');
+    b.textContent = c.t;
+    b.onclick = () => { c.fn(); closeModal(); updateUI(); if(!checkDead()) setTimeout(nextEvt, 400); };
+    ch.appendChild(b);
   });
-  const mc = document.getElementById('modal-scene');
-  drawEventScene(mc, ev.id);
-  const modal = document.getElementById('modal');
-  modal.classList.add('open');
+  drawModalScene(ev.id);
+  $('modal').classList.add('open');
 }
-
-function closeModal() {
-  document.getElementById('modal').classList.remove('open');
-}
-
-function decayStats() {
-  ['mara', 'eli'].forEach(c => {
-    const d = S[c];
-    if (!d.alive) return;
-    d.food = Math.max(0, d.food - 18);
-    d.mood = Math.max(0, d.mood - (10 - S.shelter * 1.5));
-    if (d.food <= 0) { d.hp = Math.max(0, d.hp - 12); log(c === 'mara' ? 'Mara is starving.' : 'Eli is starving.', 'danger'); }
-  });
-}
+function closeModal() { $('modal').classList.remove('open'); }
 
 function endNight() {
+  if (S.phase !== 'night') return;
   S.phase = 'day';
-  S.day += 1;
-  scavengeX = -40;
-  log(`— Day ${S.day}. Still here. —`, 'amber');
-  if (!checkDeath()) updateUI();
+  S.day++;
+  scavX = -60;
+  log(`— Day ${S.day}. Still here. —`, 'amb');
+  $('phaseBtn').onclick = openPicker;
+  if (!checkDead()) updateUI();
 }
 
-function checkDeath() {
-  ['mara', 'eli'].forEach(c => {
-    const d = S[c];
-    if (d.alive && d.hp <= 0) {
-      d.alive = false;
-      log((c === 'mara' ? 'Mara' : 'Eli') + ' is gone.', 'danger');
-    }
+// ── Stat decay ────────────────────────────────────────────────────────────
+function decay() {
+  const bonus = S.shelter * 1.5;
+  const moodDrop = Math.max(0, 12 - bonus);
+  ['mara','eli'].forEach(c => {
+    const d = S[c]; if (!d.alive) return;
+    d.fd = Math.max(0, d.fd - 16);
+    d.md = Math.max(0, d.md - moodDrop);
+    if (d.fd <= 0) { d.hp = Math.max(0, d.hp - 12); log((c==='mara'?'Mara':'Eli')+' is starving.','bad'); }
   });
-  if (!S.mara.alive && !S.eli.alive) {
-    setTimeout(showGameOver, 1200);
-    return true;
-  }
+}
+function checkDead() {
+  ['mara','eli'].forEach(c => {
+    if (S[c].alive && S[c].hp <= 0) { S[c].alive = false; log((c==='mara'?'Mara':'Eli')+' is gone.','bad'); }
+  });
+  if (!S.mara.alive && !S.eli.alive) { setTimeout(showGO, 1200); return true; }
   return false;
 }
 
-function getMoralWord(m) {
-  if (m >= 85) return 'Righteous';
-  if (m >= 65) return 'Decent';
-  if (m >= 40) return 'Compromised';
-  if (m >= 20) return 'Hardened';
-  return 'Lost';
-}
-
-function showGameOver() {
-  const go = document.getElementById('gameover');
-  go.classList.add('open');
-  document.getElementById('goStats').innerHTML =
-    `Survived <span>${S.day} days</span><br>` +
-    `Moral standing: <span>${getMoralWord(S.moral)}</span><br>` +
-    `Food left: <span>${S.food}</span>`;
-}
-
-function resetGame() {
-  Object.assign(S, { day: 1, phase: 'day', moral: 80, food: 8, meds: 2, parts: 5, fuel: 3, shelter: 1,
-    mara: { hp: 100, food: 80, mood: 90, alive: true },
-    eli:  { hp: 100, food: 80, mood: 85, alive: true },
+// ── Modal scene illustrations ─────────────────────────────────────────────
+function drawModalScene(id) {
+  const cv2 = $('ms'), ctx2 = cv2.getContext('2d');
+  const w = cv2.width, h = cv2.height, gy = h*0.8;
+  ctx2.fillStyle='#030508'; ctx2.fillRect(0,0,w,h);
+  // Night sky strip
+  const sk=ctx2.createLinearGradient(0,0,0,gy);
+  sk.addColorStop(0,'#020510'); sk.addColorStop(1,'#060c1a');
+  ctx2.fillStyle=sk; ctx2.fillRect(0,0,w,gy);
+  ctx2.fillStyle='#020305'; ctx2.fillRect(0,gy,w,h-gy);
+  // Buildings silhouette
+  [[0,50,60],[80,35,75],[160,42,55],[240,38,80],[310,30,65],[360,45,90]].forEach(([x,w2,hh])=>{
+    ctx2.fillStyle='#020408'; ctx2.fillRect(x,gy-hh,w2,hh);
   });
-  usedEvents = []; eventQueue = []; scavengeX = -40;
-  document.getElementById('gameover').classList.remove('open');
-  logEl.innerHTML = '<div class="log-line">The shelter holds.<br>Start again.</div>';
+  // Rain
+  ctx2.strokeStyle='rgba(120,160,240,0.2)'; ctx2.lineWidth=1;
+  for(let i=0;i<22;i++){const rx=((i*23+T*20)%w),ry=((i*37+T*35)%gy);ctx2.beginPath();ctx2.moveTo(rx,ry);ctx2.lineTo(rx-1,ry+7);ctx2.stroke();}
+  // Scene-specific art
+  const scenes = {
+    stranger: ()=>{
+      // Door ajar with amber glow
+      ctx2.fillStyle='#01020a'; ctx2.fillRect(w*.42,h*.18,w*.16,h*.62);
+      const g=ctx2.createRadialGradient(w*.5,h*.5,0,w*.5,h*.5,55);
+      g.addColorStop(0,'rgba(200,140,50,0.38)');g.addColorStop(1,'transparent');
+      ctx2.fillStyle=g; ctx2.fillRect(0,0,w,h);
+      ctx2.strokeStyle='#0f1520'; ctx2.lineWidth=3; ctx2.strokeRect(w*.42,h*.18,w*.16,h*.62);
+      // Woman
+      fig(ctx2,w*.28,gy,'#c8a96e',38); fig(ctx2,w*.19,gy,'#4a9eff',24);
+    },
+    food_find: ()=>{
+      // Shelves, tins
+      for(let i=0;i<3;i++){ctx2.fillStyle='#080d18';ctx2.fillRect(w*.1,h*.2+i*h*.2,w*.8,h*.18);}
+      [w*.2,w*.35,w*.55,w*.72].forEach(bx=>{ ctx2.fillStyle='#000';ctx2.shadowColor='#c8a96e';ctx2.shadowBlur=4; ctx2.fillRect(bx,gy-24,12,18); ctx2.shadowBlur=0; });
+    },
+    cache: ()=>{
+      ctx2.fillStyle='#020408'; ctx2.fillRect(w*.08,h*.15,w*.84,h*.65);
+      for(let i=1;i<4;i++){ctx2.strokeStyle='#080f1e';ctx2.lineWidth=2;ctx2.beginPath();ctx2.moveTo(w*.08,h*(0.15+i*.18));ctx2.lineTo(w*.92,h*(0.15+i*.18));ctx2.stroke();}
+      [w*.58,w*.7,w*.8].forEach((fx,fi)=>fig(ctx2,fx,gy,'#4a9eff',fi===1?22:28));
+      fig(ctx2,w*.2,gy,'#c8a96e',38);
+    },
+    raiders: ()=>{
+      [w*.55,w*.68,w*.8].forEach(rx=>{ fig(ctx2,rx,gy,'#e94560',38); ctx2.fillStyle='#000';ctx2.shadowColor='#e94560';ctx2.shadowBlur=3;ctx2.fillRect(rx-16,gy-30,14,3);ctx2.shadowBlur=0; });
+      ctx2.fillStyle='#020308'; ctx2.fillRect(w*.04,gy-75,82,75);
+      ctx2.strokeStyle='rgba(200,169,110,0.25)';ctx2.lineWidth=1;ctx2.strokeRect(w*.04,gy-75,82,75);
+    },
+    medicine: ()=>{
+      ctx2.strokeStyle='rgba(122,199,79,0.4)';ctx2.lineWidth=3;
+      ctx2.beginPath();ctx2.moveTo(w*.5,h*.1);ctx2.lineTo(w*.5,h*.55);ctx2.stroke();
+      ctx2.beginPath();ctx2.moveTo(w*.3,h*.28);ctx2.lineTo(w*.7,h*.28);ctx2.stroke();
+      [w*.3,w*.48,w*.64].forEach(bx=>{ctx2.fillStyle='#000';ctx2.shadowColor='#7ac74f';ctx2.shadowBlur=5;ctx2.fillRect(bx,gy-52,8,16);ctx2.shadowBlur=0;});
+    },
+    wounded: ()=>{
+      // Man on floor
+      ctx2.fillStyle='#000'; ctx2.shadowColor='#e94560'; ctx2.shadowBlur=6;
+      ctx2.fillRect(w*.15,gy-12,w*.45,10);
+      ctx2.beginPath();ctx2.arc(w*.6,gy-16,9,0,Math.PI*2);ctx2.fill();
+      ctx2.shadowBlur=0;
+      fig(ctx2,w*.75,gy,'#c8a96e',42);
+    },
+  };
+  (scenes[id] || scenes.food_find)();
+}
+function fig(ctx2, x, gy, glow, h) {
+  const bob = Math.sin(T*1.5)*0.8;
+  ctx2.save(); ctx2.translate(x,gy+bob);
+  ctx2.fillStyle='#000'; ctx2.shadowColor=glow; ctx2.shadowBlur=5;
+  ctx2.beginPath(); ctx2.arc(0,-h-6,h<28?4:6,0,Math.PI*2); ctx2.fill();
+  ctx2.fillRect(-(h<28?3:5),-h,h<28?6:10,h*0.42);
+  ctx2.fillRect(-(h<28?2:4),-h*0.58,h<28?4:5,h*0.42);
+  ctx2.fillRect((h<28?1:1),-h*0.58,h<28?4:5,h*0.42);
+  ctx2.shadowBlur=0; ctx2.restore();
+}
+
+// ── Game over ──────────────────────────────────────────────────────────────
+function showGO() {
+  $('go').classList.add('open');
+  $('gs').innerHTML=`Survived <span>${S.day} days</span><br>Moral: <span>${mword(S.moral)}</span><br>Food remaining: <span>${S.food}</span>`;
+}
+function reset() {
+  Object.assign(S, { day:1, phase:'day', moral:80, food:8, meds:2, parts:5, fuel:3, shelter:1,
+    mara:{hp:100,fd:80,md:90,alive:true}, eli:{hp:100,fd:80,md:85,alive:true} });
+  usedEvt=[]; evtQ=[]; scavX=-60; pickerWho=null; pickerLoc=null;
+  $('go').classList.remove('open');
+  $('phaseBtn').onclick = openPicker;
+  logEl.innerHTML='<div class="ll">The shelter holds.<br></div>';
   updateUI();
 }
 
+// ── Loop ────────────────────────────────────────────────────────────────────
+(function loop(t) { drawBg(t); requestAnimationFrame(loop); })(0);
 updateUI();
 </script>
 </body>
