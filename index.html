@@ -354,23 +354,26 @@ const ACTION_ROWS = [
 const ACTION_FRAME_W = Math.round(1280 / 6); // ~213px
 
 // BACKGROUND PANORAMAS (bottom of sprites-action2.jpg, 2×2 grid)
-//   BG0 (x=0,   y=645, w=635, h=100): Moon + wide wasteland ruins — FAR
-//   BG1 (x=645, y=645, w=635, h=100): Industrial ruins + smoke — MID-FAR
-//   BG2 (x=0,   y=752, w=635, h=100): Fires + scattered ruins — MID-NEAR
-//   BG3 (x=645, y=752, w=635, h=100): Dead forest + ruins — NEAR
+// Pixel scan results: BG row 1 = y640-745 (h=105), divider y748-752, BG row 2 = y755-853 (h=98)
+//   BG0 (x=0,   y=642, w=638, h=105): Moon + wide wasteland ruins — FAR
+//   BG1 (x=642, y=642, w=638, h=105): Industrial ruins + smoke stacks — MID-FAR
+//   BG2 (x=0,   y=755, w=638, h=96):  Fires + scattered ruins — MID-NEAR
+//   BG3 (x=642, y=755, w=638, h=96):  Dead forest + ruins — NEAR
 const BG_STRIPS = [
-  { sx:0,   sy:645, sw:635, sh:100, speed:0.08 },  // FAR
-  { sx:645, sy:645, sw:635, sh:100, speed:0.18 },  // MID-FAR
-  { sx:0,   sy:752, sw:635, sh:100, speed:0.32 },  // MID-NEAR
-  { sx:645, sy:752, sw:635, sh:100, speed:0.55 },  // NEAR
+  { sx:0,   sy:642, sw:638, sh:105, speed:0.06 },  // FAR
+  { sx:642, sy:642, sw:638, sh:105, speed:0.14 },  // MID-FAR
+  { sx:0,   sy:755, sw:638, sh:96,  speed:0.28 },  // MID-NEAR
+  { sx:642, sy:755, sw:638, sh:96,  speed:0.50 },  // NEAR
 ];
 const SCROLL = [0, 0, 0, 0];
 
 // Base interior crop coords in base-levels.jpg (1280×853)
+// 3 equal rows of ~284px. "LEVEL N" label at source y~200-225 per row.
+// Crop TOP portion of each row (y=5 to y=155) — shows candles/lanterns, avoids label
 const BASE_LEVELS = [
-  { sy:10,  sh:240 },
-  { sy:295, sh:240 },
-  { sy:578, sh:240 },
+  { sy:5,   sh:148 },  // Level 1: upper room (candles/lanterns visible ~y96-146)
+  { sy:289, sh:148 },  // Level 2
+  { sy:573, sh:148 },  // Level 3
 ];
 
 function loadAssets(callback) {
@@ -647,7 +650,7 @@ function drawShelterInterior() {
   if (ASSETS.baseLevels) {
     const img = ASSETS.baseLevels;
     const crop = BASE_LEVELS[lvl];
-    const dh = 160, dy = GY - dh;
+    const dh = 200, dy = GY - dh;
     const dw = W;
     // Draw the actual base level art
     cx.save();
