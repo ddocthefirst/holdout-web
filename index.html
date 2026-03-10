@@ -25,93 +25,89 @@ canvas#bg { position: absolute; inset: 0; width: 100%; height: 100%; }
   pointer-events: none;
 }
 
-/* HUD */
+/* HUD — compact overlay, no title bar */
 #hud {
-  padding: 10px 14px 6px;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.9) 60%, transparent);
+  padding: 8px 12px 4px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.82) 70%, transparent);
 }
-.hud-title {
-  text-align: center; font-size: 10px; letter-spacing: 5px;
-  color: #c8a96e; margin-bottom: 8px;
-  text-shadow: 0 0 14px rgba(200,169,110,0.7);
-}
-.hud-chars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.hud-char { display: flex; flex-direction: column; gap: 2px; }
-.hud-name { font-size: 9px; letter-spacing: 2px; display: flex; justify-content: space-between; }
+.hud-title { display: none; } /* removed — saves 26px */
+.hud-chars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.hud-char { display: flex; flex-direction: column; gap: 1px; }
+.hud-name { font-size: 8px; letter-spacing: 1px; display: flex; justify-content: space-between; }
 .hud-name .role { color: #445; }
 .hud-name .name { color: #c8a96e; }
 .hud-name.dead .name { color: #333; text-decoration: line-through; }
-.bars { display: flex; flex-direction: column; gap: 2px; }
-.bar-row { display: flex; align-items: center; gap: 4px; }
-.bar-lbl { font-size: 8px; color: #445; width: 14px; }
-.bar-bg { flex: 1; height: 3px; background: rgba(255,255,255,0.07); border-radius: 1px; }
-.bar-f { height: 3px; border-radius: 1px; transition: width 0.5s ease; }
+.bars { display: flex; flex-direction: column; gap: 1px; }
+.bar-row { display: flex; align-items: center; gap: 3px; }
+.bar-lbl { font-size: 7px; color: #445; width: 12px; }
+.bar-bg { flex: 1; height: 2px; background: rgba(255,255,255,0.07); border-radius: 1px; }
+.bar-f { height: 2px; border-radius: 1px; transition: width 0.5s ease; }
 .b-hp  { background: #7ac74f; }
 .b-fd  { background: #c8a96e; }
 .b-md  { background: #4a9eff; }
 
-/* Resources */
+/* Resources — inline, smaller */
 #res {
-  display: flex; justify-content: center; gap: 20px;
-  padding: 5px 14px;
-  background: rgba(0,0,0,0.45);
-  font-size: 10px; pointer-events: none;
+  display: flex; justify-content: center; gap: 14px;
+  padding: 3px 12px;
+  background: rgba(0,0,0,0.38);
+  font-size: 9px; pointer-events: none;
 }
-.rv { display: flex; align-items: center; gap: 4px; }
-.ri { font-size: 11px; }
+.rv { display: flex; align-items: center; gap: 3px; }
+.ri { font-size: 10px; }
 .rn { color: #e8e0d0; }
 
 #gap { flex: 1; }
 
-/* Moral + day */
+/* Moral + day — thinner */
 #mbar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 4px 14px;
-  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 12px;
+  background: rgba(0,0,0,0.46);
 }
-.ml { font-size: 9px; color: #445; letter-spacing: 1px; width: 38px; }
-.mo { flex: 1; height: 3px; background: rgba(233,69,96,0.35); border-radius: 1px; }
-.mi { height: 3px; border-radius: 1px; background: #7ac74f; transition: width 0.6s; }
-.dl { font-size: 9px; color: #4a9eff; letter-spacing: 1px; }
+.ml { font-size: 8px; color: #445; letter-spacing: 1px; width: 34px; }
+.mo { flex: 1; height: 2px; background: rgba(233,69,96,0.35); border-radius: 1px; }
+.mi { height: 2px; border-radius: 1px; background: #7ac74f; transition: width 0.6s; }
+.dl { font-size: 8px; color: #4a9eff; letter-spacing: 1px; }
 
-/* Log */
+/* Log — single line, minimal */
 #log {
-  height: 44px; overflow: hidden;
-  padding: 0 14px 5px;
-  background: rgba(0,0,0,0.7);
-  display: flex; flex-direction: column; justify-content: flex-end;
+  height: 22px; overflow: hidden;
+  padding: 0 12px 4px;
+  background: rgba(0,0,0,0.60);
+  display: flex; align-items: flex-end;
 }
-.ll { font-size: 10px; color: #445; line-height: 1.6; }
-.ll.hi  { color: #999; }
+.ll { font-size: 9px; color: #445; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ll.hi  { color: #888; }
 .ll.good { color: #7ac74f; }
 .ll.bad  { color: #e94560; }
 .ll.amb  { color: #c8a96e; }
 .ll.mor  { color: #a855f7; }
 
-/* Actions panel */
+/* Actions panel — compact, 2 per row max */
 #act {
-  padding: 8px 12px;
+  padding: 5px 10px;
   background: rgba(0,0,0,0.88);
   pointer-events: all;
-  display: flex; flex-direction: column; gap: 5px;
+  display: flex; flex-direction: column; gap: 4px;
 }
-.btn-row { display: flex; gap: 5px; }
+.btn-row { display: flex; gap: 4px; }
 .ab {
   flex: 1;
-  background: transparent; border: 1px solid #222;
-  color: #778; font-family: 'Courier New', monospace;
-  font-size: 10px; padding: 7px 9px;
-  cursor: pointer; text-align: left; line-height: 1.45;
-  transition: border-color 0.18s, color 0.18s, background 0.18s;
+  background: transparent; border: 1px solid #1e1e22;
+  color: #667; font-family: 'Courier New', monospace;
+  font-size: 9px; padding: 5px 8px;
+  cursor: pointer; text-align: left; line-height: 1.3;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 .ab:hover:not(:disabled) { border-color: #c8a96e; color: #c8a96e; background: rgba(200,169,110,0.05); }
 .ab:disabled { opacity: 0.2; cursor: default; }
-.ab .c { display: block; font-size: 9px; color: #445; margin-top: 1px; }
+.ab .c { display: block; font-size: 8px; color: #445; margin-top: 1px; }
 .ab.full { flex: none; width: 100%; }
-.ab.blue { border-color: #1a3050; color: #4a9eff; }
-.ab.blue:hover:not(:disabled) { border-color: #4a9eff; background: rgba(74,158,255,0.06); color: #cce; }
-.ab.purple { border-color: #2a1a40; color: #a855f7; }
-.ab.purple:hover:not(:disabled) { border-color: #a855f7; background: rgba(168,85,247,0.06); color: #dcc; }
+.ab.blue { border-color: #1a2840; color: #4a9eff; }
+.ab.blue:hover:not(:disabled) { border-color: #4a9eff; background: rgba(74,158,255,0.06); color: #aac; }
+.ab.purple { border-color: #221830; color: #a855f7; }
+.ab.purple:hover:not(:disabled) { border-color: #a855f7; background: rgba(168,85,247,0.06); color: #cbb; }
 
 /* Location picker overlay */
 #picker {
@@ -252,8 +248,7 @@ canvas#bg { position: absolute; inset: 0; width: 100%; height: 100%; }
   </div>
 
   <div id="log">
-    <div class="ll">The shelter holds. For now.</div>
-    <div class="ll hi">Mara watches the street. Eli checks the boards.</div>
+    <div class="ll hi" id="l0">The shelter holds. For now.</div>
   </div>
 
   <div id="act">
@@ -337,9 +332,10 @@ let spritesReady = false;
 // ── Asset images ─────────────────────────────────────────────────────────
 const ASSETS = { parallax: null, baseLevels: null, spritesWalk: null, action2: null, main: null,
                   lv1: null, lv2: null, lv3: null, walkClean: null,
-                  scavBg1: null, scavBg2: null };
+                  scavBg1: null, scavBg2: null,
+                  scavNight1: null, scavNight2: null };
 let assetsReady = 0;
-const ASSETS_TOTAL = 11; // +2 scav backgrounds
+const ASSETS_TOTAL = 13; // +4 scav backgrounds (2 day, 2 night)
 
 // ── Walk clean sprite sheet (file_16, white bg, 4 rows × 8 frames, 1280×853) ──
 // PIXEL-SCANNED exact values:
@@ -560,12 +556,18 @@ function loadAssets(callback) {
   wci.onerror = onLoad;
   wci.src = 'assets/sprites-walk-clean.jpg';
 
-  // Dedicated scavenging outdoor backgrounds (1280×853, two variants)
+  // Scavenging backgrounds: 2 daytime, 2 nighttime
   ['scavBg1','scavBg2'].forEach((k,i) => {
     const img = new Image();
     img.onload = () => { ASSETS[k] = img; onLoad(); };
     img.onerror = onLoad;
     img.src = `assets/scav-bg${i+1}.jpg`;
+  });
+  ['scavNight1','scavNight2'].forEach((k,i) => {
+    const img = new Image();
+    img.onload = () => { ASSETS[k] = img; onLoad(); };
+    img.onerror = onLoad;
+    img.src = `assets/scav-night${i+1}.jpg`;
   });
 }
 
@@ -666,7 +668,12 @@ function drawBg(t) {
   // Per reference (file_24): character stays at fixed X, background scrolls behind.
   // Backgrounds (file_25/26): cracked cobblestone, ruined city, fire barrel, wrecked car.
   {
-    const scavImg = (scavBgVariant === 0 ? ASSETS.scavBg1 : ASSETS.scavBg2) || ASSETS.scavBg1 || ASSETS.scavBg2;
+    // Night backgrounds for scavenging phase (dark, moonlit); day backgrounds otherwise
+    const isNight = nightFade > 0.5;
+    const pool = isNight
+      ? [ASSETS.scavNight1, ASSETS.scavNight2, ASSETS.scavBg1, ASSETS.scavBg2]
+      : [ASSETS.scavBg1, ASSETS.scavBg2, ASSETS.scavNight1, ASSETS.scavNight2];
+    const scavImg = pool[scavBgVariant % 2] || pool.find(x => x);
     if (scavImg) {
       // Scale bg to fill canvas HEIGHT, maintain aspect → width ~1229px (extends off both sides)
       const scaleS = H / scavImg.naturalHeight;
@@ -682,7 +689,7 @@ function drawBg(t) {
       cx.drawImage(scavImg, 0, 0, scavImg.naturalWidth, scavImg.naturalHeight, bx, 0, bgW, bgH);
       // When we reach the end, seamlessly blend in the other image
       if (bx + bgW < W) {
-        const scavImg2 = (scavBgVariant === 0 ? ASSETS.scavBg2 : ASSETS.scavBg1) || scavImg;
+        const scavImg2 = pool[(scavBgVariant + 1) % 2] || scavImg;
         cx.drawImage(scavImg2, 0, 0, scavImg2.naturalWidth, scavImg2.naturalHeight, bx + bgW, 0, bgW, bgH);
       }
       cx.restore();
@@ -767,17 +774,18 @@ function drawChars() {
     // At charH=160px → charW≈160px → two chars at x=100,x=310 fit cleanly on 420px canvas
     const dayFloor = GY + 8;  // stand on the ground line
     const charH = 160;
+    // Idle animation: ~0.6 cycles/sec = gentle sway (T is in seconds)
     if (S.mara.alive) {
-      const mFr = Math.floor(T * 1.8) % 8;
+      const mFr = Math.floor(T * 0.7) % 8;
       if (ASSETS.walkClean) drawCleanSprite(cx, 105, dayFloor, 0, mFr, charH);
       else charSprite(cx, 105, dayFloor, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
     }
     if (S.eli.alive) {
-      const eFr = (Math.floor(T * 1.8) + 4) % 8;
+      const eFr = (Math.floor(T * 0.7) + 4) % 8;
       if (ASSETS.walkClean) drawCleanSprite(cx, 315, dayFloor, 0, eFr, charH);
       else charSprite(cx, 315, dayFloor, eliWalk*0.5, '#4a9eff', SPRITES.eli, 'eli');
     }
-    maraWalk += 0.025; eliWalk += 0.025;
+    maraWalk += 0.01; eliWalk += 0.01;
   } else {
     // ── NIGHT: scavenger walks across screen, other waits at home ───────
     // Scavenging: solo character, larger than base (single char so more room)
@@ -802,17 +810,18 @@ function drawChars() {
     };
 
     // Character is FIXED in center of screen — background scrolls (per file_24 reference)
+    // Walk speed: ~0.018/frame @ 60fps = ~1.1 full cycles/sec (natural walking pace)
     const charCenterX = Math.round(W * 0.42);
     if (scaver !== 'eli' && S.mara.alive) {
-      maraWalk += 0.14;
+      maraWalk += 0.018;
       walkFn(charCenterX, '#c8a96e', maraWalk);
     }
     if (scaver === 'eli' && S.eli.alive) {
-      eliWalk += 0.12;
+      eliWalk += 0.018;
       walkFn(charCenterX, '#4a9eff', eliWalk);
     }
     if (scaver === 'both') {
-      maraWalk += 0.13; eliWalk += 0.13;
+      maraWalk += 0.018; eliWalk += 0.018;
       if (S.mara.alive) walkFn(charCenterX - 20, '#c8a96e', maraWalk);
       if (S.eli.alive)  walkFn(charCenterX + 20, '#4a9eff', eliWalk);
     }
@@ -1137,12 +1146,9 @@ function updateUI() {
 
 const logEl = $('log');
 function log(msg, cls='') {
-  const lines = logEl.querySelectorAll('.ll');
-  lines.forEach((l,i) => { if(i===lines.length-1) l.className='ll'; });
-  if (lines.length >= 2) lines[0].remove();
-  const d = document.createElement('div');
-  d.className = 'll hi' + (cls?' '+cls:''); d.textContent = msg;
-  logEl.appendChild(d);
+  // Single-line log — just update the one line in place
+  const line = $('l0') || logEl.querySelector('.ll');
+  if (line) { line.className = 'll hi' + (cls?' '+cls:''); line.textContent = msg; }
 }
 
 function mword(m) {
@@ -1452,7 +1458,7 @@ function reset() {
   usedEvt=[]; evtQ=[]; scavX=-60; pickerWho=null; pickerLoc=null;
   $('go').classList.remove('open');
   $('phaseBtn').onclick = openPicker;
-  logEl.innerHTML='<div class="ll">The shelter holds.<br></div>';
+  logEl.innerHTML='<div class="ll hi" id="l0">The shelter holds.</div>';
   updateUI();
 }
 
