@@ -339,46 +339,51 @@ let assetsReady = 0;
 const ASSETS_TOTAL = 9; // add 4 new
 
 // ── Walk clean sprite sheet (file_16, white bg, 4 rows × 8 frames, 1280×853) ──
-// White background: threshold lum > 220 → transparent, keep dark character pixels
-// Row 0 (y≈0,   h≈213): walk standard
-// Row 1 (y≈213, h≈213): walk with pack (heavier step)
-// Row 2 (y≈426, h≈213): crouch walk
-// Row 3 (y≈639, h≈213): run
+// PIXEL-SCANNED exact values:
+//   Row boundaries (content start→end): 49→198, 239→383, 434→577, 633→794
+//   Frame separators at x: [0,142,299,458,621,773,926,1090,1239] → 8 frames
 const CLEAN_ROWS = [
-  { y:4,   h:206, frames:8 },
-  { y:214, h:210, frames:8 },
-  { y:428, h:207, frames:8 },
-  { y:639, h:210, frames:8 },
+  { y:49,  h:149, frames:8 },  // Row 0: walk standard
+  { y:239, h:145, frames:8 },  // Row 1: walk variant
+  { y:434, h:144, frames:8 },  // Row 2: crouch walk
+  { y:633, h:162, frames:8 },  // Row 3: run
 ];
-const CLEAN_FW = Math.round(1280 / 8); // 160px per frame
+// Exact frame x positions (from separator scan)
+const CLEAN_FRAMES = [
+  {x:1,    w:140}, {x:143,  w:155}, {x:300,  w:157}, {x:459,  w:161},
+  {x:622,  w:150}, {x:774,  w:151}, {x:927,  w:162}, {x:1091, w:147},
+];
 const _cleanCache = new Map();
 
 function drawCleanSprite(ctx, x, y, rowIdx, frameIdx, scale) {
   const row = CLEAN_ROWS[rowIdx];
   if (!ASSETS.walkClean || !row) return;
   const fi = Math.abs(frameIdx) % row.frames;
+  const frame = CLEAN_FRAMES[fi];
   const targetH = scale || 100;
-  const targetW = Math.round(CLEAN_FW * targetH / row.h);
+  const targetW = Math.round(frame.w * targetH / row.h);
   const key = `${rowIdx}_${fi}_${targetH}`;
   let cached = _cleanCache.get(key);
   if (!cached) {
     const oc = document.createElement('canvas');
     oc.width = targetW; oc.height = targetH;
     const octx = oc.getContext('2d');
-    octx.drawImage(ASSETS.walkClean, fi * CLEAN_FW, row.y, CLEAN_FW, row.h, 0, 0, targetW, targetH);
-    // Remove white background: lum > 220 → transparent
+    // Draw exact frame using pixel-scanned bounds
+    octx.drawImage(ASSETS.walkClean, frame.x, row.y, frame.w, row.h, 0, 0, targetW, targetH);
+    // Remove white background: lum > 215 → transparent, 180-215 → fade
     const id = octx.getImageData(0, 0, targetW, targetH);
     const px = id.data;
     for (let i = 0; i < px.length; i += 4) {
       const lum = px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114;
-      if (lum > 220) { px[i+3] = 0; }
-      else if (lum > 180) { px[i+3] = Math.round(px[i+3] * (220-lum)/40); }
+      if (lum > 215) { px[i+3] = 0; }
+      else if (lum > 170) { px[i+3] = Math.round(px[i+3] * (215-lum)/45); }
     }
     octx.putImageData(id, 0, 0);
     cached = oc;
     _cleanCache.set(key, cached);
   }
   ctx.save();
+  ctx.filter = 'brightness(1.4) contrast(1.1)'; // lift for visibility
   ctx.drawImage(cached, x - targetW/2, y - targetH);
   ctx.restore();
 }
