@@ -328,6 +328,10 @@ let pickerWho = null, pickerLoc = null;
 let scavX = -60, maraWalk = 0, eliWalk = 0;
 let nightFade = 0; // 0=day, 1=night (smooth transition)
 
+// Global sprite storage
+const SPRITES = { mara: [], eli: [], action: [] };
+let spritesReady = false;
+
 // ── Canvas setup ─────────────────────────────────────────────────────────
 const cv = document.getElementById('bg');
 const cx = cv.getContext('2d');
@@ -523,25 +527,25 @@ function drawChars() {
   const isNight = S.phase === 'night';
   const scaver = pickerWho; // who is out
   if (!isNight) {
-    if (S.mara.alive) char(cx, 95,  GY, maraWalk,      '#c8a96e', 'mara');
-    if (S.eli.alive)  char(cx, 200, GY, eliWalk*0.5,   '#4a9eff', 'eli');
+    if (S.mara.alive) charSprite(cx, 95,  GY, maraWalk,      '#c8a96e', SPRITES.mara, 'mara');
+    if (S.eli.alive)  charSprite(cx, 200, GY, eliWalk*0.5,   '#4a9eff', SPRITES.eli,  'eli');
     maraWalk += 0.025; eliWalk += 0.025;
   } else {
     if (scaver !== 'eli' && S.mara.alive) {
       scavX += 0.5; if (scavX > W+60) scavX = -60;
       maraWalk += 0.14;
-      char(cx, scavX, GY, maraWalk, '#c8a96e', 'mara');
+      charSprite(cx, scavX, GY, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
     }
     if (scaver === 'eli' && S.eli.alive) {
       scavX += 0.4; if (scavX > W+60) scavX = -60;
       eliWalk += 0.12;
-      char(cx, scavX, GY, eliWalk, '#4a9eff', 'eli');
+      charSprite(cx, scavX, GY, eliWalk, '#4a9eff', SPRITES.eli, 'eli');
     }
     if (scaver === 'both') {
       scavX += 0.45; if (scavX > W+60) scavX = -60;
       maraWalk += 0.13; eliWalk += 0.13;
-      if (S.mara.alive) char(cx, scavX - 24, GY, maraWalk, '#c8a96e', 'mara');
-      if (S.eli.alive)  char(cx, scavX + 12, GY, eliWalk,  '#4a9eff', 'eli');
+      if (S.mara.alive) charSprite(cx, scavX - 24, GY, maraWalk, '#c8a96e', SPRITES.mara, 'mara');
+      if (S.eli.alive)  charSprite(cx, scavX + 12, GY, eliWalk,  '#4a9eff', SPRITES.eli,  'eli');
     }
     const home = scaver === 'mara' ? 'eli' : scaver === 'eli' ? 'mara' : null;
     if (home && S[home].alive) charSmall(cx, 58, GY - 50);
@@ -705,6 +709,134 @@ function charSmall(ctx, x, y) {
   ctx.beginPath(); ctx.arc(-2,-27,1.5,0,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(2,-27,1.5,0,Math.PI*2); ctx.fill();
   ctx.shadowBlur=0; ctx.restore();
+}
+
+// Cached tinted frame canvases
+const tintCache = new Map();
+
+function charSprite(ctx, x, y, walk, glow, spriteArr, style) {
+  if (!spriteArr || !spriteArr.length) {
+    char(ctx, x, y, walk, glow, style); // fallback
+    return;
+  }
+  const fi = Math.abs(Math.floor(walk * 8)) % spriteArr.length;
+  const f = spriteArr[fi];
+  const targetH = 90;
+  const scale = targetH / f.height;
+  const dw = Math.round(f.width * scale);
+  const dh = targetH;
+
+  const cacheKey = f.width + '_' + f.height + '_' + glow + '_' + fi;
+  let tinted = tintCache.get(cacheKey);
+  if (!tinted) {
+    tinted = document.createElement('canvas');
+    tinted.width = dw; tinted.height = dh;
+    const tctx = tinted.getContext('2d');
+    tctx.drawImage(f, 0, 0, dw, dh);
+    tctx.globalCompositeOperation = 'source-in';
+    tctx.fillStyle = glow;
+    tctx.fillRect(0, 0, dw, dh);
+    tintCache.set(cacheKey, tinted);
+  }
+
+  ctx.save();
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 14;
+  ctx.drawImage(tinted, x - dw/2, y - dh);
+  ctx.restore();
+
+  // Ground shadow
+  ctx.save();
+  ctx.fillStyle = glow.replace(')', ',0.1)').replace('rgb','rgba');
+  ctx.beginPath(); ctx.ellipse(x, y+2, dw*0.4, 4, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// ── Sprite loading & extraction ───────────────────────────────────────────
+function loadSprites(callback) {
+  const img = new Image();
+  img.onload = () => {
+    extractSprites(img);
+    spritesReady = true;
+    callback();
+  };
+  img.onerror = () => { spritesReady = false; callback(); }; // fallback to procedural
+  img.src = 'sprites/sheet2.jpg';
+}
+
+function extractSprites(img) {
+  const oc = document.createElement('canvas');
+  oc.width = img.width; oc.height = img.height;
+  const octx = oc.getContext('2d');
+  octx.drawImage(img, 0, 0);
+  const full = octx.getImageData(0, 0, img.width, img.height);
+  const px = full.data;
+  const W = img.width, H = img.height;
+
+  // Find horizontal bands (rows of characters)
+  const rowDark = [];
+  for (let y = 0; y < H; y++) {
+    let dark = 0;
+    for (let x = 0; x < W; x++) {
+      const i = (y*W+x)*4;
+      if (px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114 < 160) dark++;
+    }
+    rowDark.push(dark);
+  }
+  const minDark = W * 0.03;
+  const bands = [];
+  let inBand = false, bStart = 0;
+  for (let y = 0; y < H; y++) {
+    if (rowDark[y] > minDark && !inBand) { inBand = true; bStart = y; }
+    if (rowDark[y] < minDark * 0.3 && inBand) {
+      inBand = false;
+      if (y - bStart > 40) bands.push([Math.max(0,bStart-4), Math.min(H,y+4)]);
+    }
+  }
+
+  // Extract frames from each band
+  const destinations = [SPRITES.eli, SPRITES.mara, SPRITES.action];
+  bands.slice(0,3).forEach(([y0,y1], bi) => {
+    const bH = y1-y0;
+    const colDark = [];
+    for (let x = 0; x < W; x++) {
+      let dark = 0;
+      for (let y = y0; y < y1; y++) {
+        const i = (y*W+x)*4;
+        if (px[i]*0.299+px[i+1]*0.587+px[i+2]*0.114 < 160) dark++;
+      }
+      colDark.push(dark);
+    }
+    const colBands = [];
+    let inCol = false, cStart = 0;
+    const minCol = bH * 0.04;
+    for (let x = 0; x < W; x++) {
+      if (colDark[x] > minCol && !inCol) { inCol = true; cStart = x; }
+      if (colDark[x] < minCol*0.3 && inCol) {
+        inCol = false;
+        if (x - cStart > 30) colBands.push([Math.max(0,cStart-4), Math.min(W,x+4)]);
+      }
+    }
+    colBands.slice(0,8).forEach(([x0,x1]) => {
+      const fw=x1-x0, fh=bH;
+      const fc=document.createElement('canvas');
+      fc.width=fw; fc.height=fh;
+      const fctx=fc.getContext('2d');
+      const fd=new ImageData(fw,fh);
+      for (let fy=0;fy<fh;fy++) for (let fx=0;fx<fw;fx++) {
+        const si=((y0+fy)*W+(x0+fx))*4;
+        const lum=px[si]*0.299+px[si+1]*0.587+px[si+2]*0.114;
+        const di=(fy*fw+fx)*4;
+        if (lum < 175) {
+          fd.data[di]=fd.data[di+1]=fd.data[di+2]=0;
+          const darkness=1-lum/175;
+          fd.data[di+3]=Math.round(255*darkness*darkness);
+        }
+      }
+      fctx.putImageData(fd,0,0);
+      destinations[bi].push(fc);
+    });
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1060,7 +1192,9 @@ function reset() {
 
 // ── Loop ────────────────────────────────────────────────────────────────────
 (function loop(t) { drawBg(t); requestAnimationFrame(loop); })(0);
-updateUI();
+loadSprites(() => {
+  updateUI();
+});
 </script>
 </body>
 </html>
